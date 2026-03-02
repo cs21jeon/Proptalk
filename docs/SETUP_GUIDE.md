@@ -19,29 +19,23 @@ psql -U goldenrabbit -d voiceroom -f init_db.sql
 
 ### 2-1. Google Cloud Console (https://console.cloud.google.com)
 
-1. **프로젝트 생성** (또는 기존 프로젝트 사용)
+> 프로젝트: `speech-to-text-goldenrabbit` (846392940969)
 
-2. **OAuth 2.0 클라이언트 ID 생성**
-   - API 및 서비스 → 사용자 인증 정보
-   - OAuth 클라이언트 ID 만들기
-   - 유형: **웹 애플리케이션** (서버 검증용)
-   - 유형: **Android** (Flutter 앱용, SHA-1 필요)
-   - 유형: **iOS** (Flutter 앱용)
-   - `GOOGLE_CLIENT_ID` 메모
+1. **OAuth 2.0 클라이언트 ID** (Google Auth Platform → Clients)
+   - **웹 애플리케이션**: `846392940969-a7k37gkon1p451mlnhp0oj9qaok1d8o1` (서버 토큰 교환용)
+   - **Android**: `846392940969-ro1j6gm1r9mdsmfjkfv40311l0053s5a`
+     - 패키지: `biz.goldenrabbit.proptalk`
+     - SHA-1: `FA:53:98:5C:4B:D3:69:C1:A2:36:87:19:A8:79:BC:E3:68:F6:D0:98`
 
-3. **Service Account 생성** (Google Drive 업로드용)
-   - IAM 및 관리자 → 서비스 계정
-   - 서비스 계정 만들기
-   - JSON 키 다운로드 → 서버에 업로드
-   - 경로: `/home/hosting_users/goldenrabbit/chat_stt/credentials/service-account.json`
+2. **Google Drive API 활성화**
+   - APIs & Services → Library → "Google Drive API" → Enable
 
-4. **Google Drive API 활성화**
-   - API 및 서비스 → 라이브러리 → "Google Drive API" 검색 → 사용
+3. **OAuth 동의화면 스코프** (Google Auth Platform → Data Access)
+   - `drive.file` 스코프 추가 (비민감, 별도 심사 불필요)
 
-5. **Drive 폴더 공유**
-   - Google Drive에서 "VoiceRoom" 폴더 생성
-   - 폴더를 Service Account 이메일과 공유 (편집자 권한)
-   - 폴더 ID 메모 (URL에서 추출: drive.google.com/drive/folders/FOLDER_ID)
+4. **OAuth 동의화면 사용자** (Google Auth Platform → Audience)
+   - 테스트 모드: 테스트 사용자 수동 추가 (최대 100명)
+   - 프로덕션: 모든 Google 계정 허용 (출시 시 전환)
 
 ### 2-2. Flutter 앱 설정
 
@@ -109,8 +103,11 @@ nano ecosystem.config.js
 # - DB_PASS
 # - SECRET_KEY (랜덤 문자열)
 # - JWT_SECRET (랜덤 문자열)
-# - GOOGLE_CLIENT_ID
-# - GOOGLE_DRIVE_FOLDER_ID
+# - GOOGLE_CLIENT_ID (Web 클라이언트 ID)
+# - GOOGLE_CLIENT_SECRET (Web 클라이언트 Secret)
+# - OPENAI_API_KEY
+# - CLAUDE_API_KEY
+# - ENABLE_DRIVE_BACKUP ('true' / 'false')
 ```
 
 ## 5단계: PM2 실행
@@ -209,8 +206,9 @@ flutter run
 
 ## 주의사항
 
-- **메모리**: Whisper small 모델 약 2GB 필요. Cafe24 서버 메모리 확인 필수
-- **CPU 변환 시간**: 1분 음성 ≈ 60초 소요 (small 모델 기준)
-- **동시 처리**: workers=1이므로 동시에 여러 파일 변환 시 큐잉됨
-- **보안**: JWT_SECRET, SECRET_KEY는 반드시 랜덤 문자열로 변경
-- **Service Account JSON**: 절대 git에 커밋하지 말 것
+- **STT**: OpenAI Whisper API 사용 ($0.006/분), 로컬 모델 아님
+- **포맷**: Android 통화 녹음(3GP)은 서버에서 자동 MP3 변환 (ffmpeg 필수)
+- **Drive**: 방장의 OAuth 토큰으로 Drive 저장, Service Account 아님
+- **토큰 갱신**: access_token 1시간 만료, refresh_token으로 자동 갱신
+- **보안**: JWT_SECRET, SECRET_KEY, GOOGLE_CLIENT_SECRET 절대 git에 커밋하지 말 것
+- **PM2**: 환경변수 변경 시 `pm2 delete` → `pm2 start` 방식 사용 (restart --update-env 캐시 문제)

@@ -16,6 +16,7 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   String _currentPath = '';
+  bool _showPermissionDenied = false;
 
   // 지원하는 오디오 확장자
   static const _audioExtensions = [
@@ -79,6 +80,7 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
           setState(() {
             _errorMessage = '파일 접근 권한이 필요합니다.\n설정에서 "모든 파일 접근" 권한을 허용해주세요.';
             _isLoading = false;
+            _showPermissionDenied = true;
           });
           return;
         }
@@ -195,18 +197,41 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
 
     if (_errorMessage != null) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(_errorMessage!, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadAudioFiles,
-              child: const Text('다시 시도'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _showPermissionDenied ? Icons.folder_off : Icons.error_outline,
+                size: 64,
+                color: _showPermissionDenied ? Colors.orange : Colors.red,
+              ),
+              const SizedBox(height: 16),
+              Text(_errorMessage!, textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              if (_showPermissionDenied) ...[
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final status = await Permission.manageExternalStorage.request();
+                    if (status.isGranted) {
+                      _loadAudioFiles();
+                    }
+                  },
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('파일 접근 권한 허용'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(220, 48),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              OutlinedButton(
+                onPressed: _loadAudioFiles,
+                child: const Text('다시 시도'),
+              ),
+            ],
+          ),
         ),
       );
     }

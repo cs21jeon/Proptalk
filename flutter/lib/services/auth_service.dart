@@ -10,8 +10,13 @@ class AuthService extends ChangeNotifier {
   late final SocketService socket;
   
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['email', 'profile'],
-    serverClientId: '325885879870-rj00lod4843dj8qrt9gjnrpcfmsltc9v.apps.googleusercontent.com',
+    scopes: [
+      'email',
+      'profile',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
+    serverClientId: '846392940969-a7k37gkon1p451mlnhp0oj9qaok1d8o1.apps.googleusercontent.com',
+    forceCodeForRefreshToken: true,
   );
   
   Map<String, dynamic>? _currentUser;
@@ -60,13 +65,16 @@ class AuthService extends ChangeNotifier {
       
       final auth = await account.authentication;
       final idToken = auth.idToken;
-      
+
       if (idToken == null) {
         throw Exception('Google ID Token을 가져올 수 없습니다');
       }
-      
-      // 서버에 토큰 검증 요청
-      final data = await api.loginWithGoogle(idToken);
+
+      // serverAuthCode 가져오기 (Drive 권한용)
+      final serverAuthCode = account.serverAuthCode;
+
+      // 서버에 토큰 검증 요청 (serverAuthCode 포함)
+      final data = await api.loginWithGoogle(idToken, serverAuthCode: serverAuthCode);
       _currentUser = data['user'];
       
       // 토큰 저장

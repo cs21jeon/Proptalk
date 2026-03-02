@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'audio_picker_screen.dart';
@@ -144,36 +145,41 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!mounted) return;
 
-      // 새 메시지가 있는지 확인
+      // 서버 응답과 현재 상태 비교 후 갱신
       if (messages.isNotEmpty) {
         final latestId = messages.first['id'] as int?;
-        if (_lastMessageId != null && latestId != null && latestId > _lastMessageId!) {
-          // 새 메시지가 있음 - 전체 갱신
-          setState(() {
-            _messages = messages;
-            _lastMessageId = latestId;
-          });
-          _scrollToBottom();
-        } else if (_lastMessageId == null && latestId != null) {
-          _lastMessageId = latestId;
-        } else {
-          // replies 업데이트 확인 (요약 결과 등)
-          bool hasUpdates = false;
+        final isNewMessage = _lastMessageId != null && latestId != null && latestId > _lastMessageId!;
+
+        // 메시지 수 변경, 새 메시지, reply 변경 모두 감지
+        bool hasChanges = messages.length != _messages.length || isNewMessage;
+
+        if (!hasChanges) {
           for (int i = 0; i < messages.length && i < _messages.length; i++) {
-            final newMsg = messages[i];
-            final oldMsg = _messages[i];
-            final newReplies = (newMsg['replies'] as List?) ?? [];
-            final oldReplies = (oldMsg['replies'] as List?) ?? [];
+            final newReplies = (messages[i]['replies'] as List?) ?? [];
+            final oldReplies = (_messages[i]['replies'] as List?) ?? [];
             if (newReplies.length != oldReplies.length) {
-              hasUpdates = true;
+              hasChanges = true;
               break;
             }
+            // reply 내용 변경 감지 (삭제 후 재생성 등)
+            for (int j = 0; j < newReplies.length && j < oldReplies.length; j++) {
+              if (newReplies[j]['id'] != oldReplies[j]['id']) {
+                hasChanges = true;
+                break;
+              }
+            }
+            if (hasChanges) break;
           }
-          if (hasUpdates) {
-            setState(() {
-              _messages = messages;
-            });
-          }
+        }
+
+        if (hasChanges) {
+          setState(() {
+            _messages = messages;
+            if (latestId != null) _lastMessageId = latestId;
+          });
+          if (isNewMessage) _scrollToBottom();
+        } else if (_lastMessageId == null && latestId != null) {
+          _lastMessageId = latestId;
         }
       }
     } catch (e) {
@@ -720,8 +726,20 @@ class _ChatScreenState extends State<ChatScreen> {
                               color: theme.colorScheme.primary),
                         ),
                         const SizedBox(height: 2),
-                        Text(reply['content'] ?? '',
-                            style: const TextStyle(height: 1.4)),
+                        if (reply['type'] == 'transcript')
+                          MarkdownBody(
+                            data: reply['content'] ?? '',
+                            styleSheet: MarkdownStyleSheet(
+                              p: const TextStyle(fontSize: 14, height: 1.5),
+                              h3: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                              listBullet: const TextStyle(fontSize: 14),
+                              blockSpacing: 8,
+                            ),
+                            shrinkWrap: true,
+                          )
+                        else
+                          Text(reply['content'] ?? '',
+                              style: const TextStyle(height: 1.4)),
                       ],
                     ),
                   )),

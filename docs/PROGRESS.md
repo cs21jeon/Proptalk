@@ -1,22 +1,23 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-02
+> 최종 업데이트: 2026-03-02 (Google Drive 연동 구현)
 
 ## 프로젝트 개요
 
 음성-텍스트 변환 채팅 앱 (Proptalk)
-- 통화 녹음 파일 업로드 → **OpenAI Whisper API** → Claude 요약 → 자동 댓글
+- 통화 녹음 파일 업로드 → **OpenAI Whisper API** → **Claude 요약 (마크다운)** → 자동 댓글 → **Google Drive 저장**
 
 ### 핵심 기능
-1. Google 계정 로그인 (OAuth 2.0) ✅
+1. Google 계정 로그인 (OAuth 2.0 + Drive 연동) ✅
 2. 전용 채팅방 (생성/참여/멤버 관리) ✅
-3. 음성 파일 업로드 ✅
+3. 음성 파일 업로드 (3GP/AMR 자동 변환) ✅
 4. 자동 STT 변환 (**OpenAI Whisper API**) ✅
-5. Claude API 요약 ✅
-6. 자동 댓글 ✅
+5. Claude API 요약 (**마크다운 구조화**) ✅
+6. 자동 댓글 (MarkdownBody 렌더링) ✅
 7. 파일명 파싱 (전화번호/날짜/이름) ✅
-8. 24시간 후 자동 삭제 ✅
-9. 3초 폴링 실시간 업데이트 ✅ **신규**
+8. **Google Drive 자동 저장** (방장 드라이브) ✅ **신규**
+9. Drive 프록시 다운로드 ✅ **신규**
+10. 3초 폴링 실시간 업데이트 ✅
 
 ---
 
@@ -28,23 +29,44 @@
 |------|------|------|
 | 서버 배포 | ✅ | goldenrabbit.biz:5060 |
 | Nginx 프록시 | ✅ | /voiceroom/ 경로 |
-| PostgreSQL DB | ✅ | voiceroom DB |
-| Google OAuth | ✅ | 웹/앱 클라이언트 설정 완료 |
-| Flutter 앱 빌드 | ✅ | Release APK (49.3MB) |
-| 채팅방 기능 | ✅ | 생성/참여/메시지 |
-| 파일 업로드 | ✅ | 녹음 파일 선택 가능 |
-| 커스텀 파일 브라우저 | ✅ | 최신순 정렬, 통신사별 폴더 지원 |
+| PostgreSQL DB | ✅ | voiceroom DB (google_tokens, drive_folder_id 추가) |
+| Google OAuth + Drive | ✅ | `speech-to-text-goldenrabbit` 프로젝트, drive.file 스코프 |
+| Flutter 앱 빌드 | ✅ | Release APK (50.7MB) |
+| 채팅방 기능 | ✅ | 생성/참여/메시지, 방 생성 시 Drive 폴더 자동 생성 |
+| 파일 업로드 | ✅ | 3GP/AMR 자동 감지 → MP3 변환 |
+| 커스텀 파일 브라우저 | ✅ | 최신순 정렬, MANAGE_EXTERNAL_STORAGE 권한 |
 | **OpenAI Whisper STT** | ✅ | 무제한 길이 지원 (자동 분할) |
-| **Claude 요약** | ✅ | 자동 요약 생성 |
-| **3초 폴링** | ✅ | 실시간 메시지 업데이트 |
+| **Claude 요약** | ✅ | 마크다운 구조화 (볼드 키워드 + 불릿) |
+| **Google Drive 연동** | ✅ | 방장 Drive에 자동 저장, 서버 파일 즉시 삭제 |
+| **Drive 프록시 다운로드** | ✅ | 서버 로컬 없으면 Drive에서 다운로드 |
+| **3초 폴링** | ✅ | 실시간 메시지 + 댓글 내용 변경 감지 |
 | **GitHub 커밋** | ✅ | cs21jeon/Proptalk |
 
-### 테스트 필요 🔄
+### 테스트 진행 중 🔄
 
 | 항목 | 상태 | 비고 |
 |------|------|--------|
-| 전체 플로우 | 🔄 | 앱에서 업로드 → STT → 요약 → 댓글 |
-| 음성 다운로드 | 🔄 | Download/Proptalk 폴더 저장 |
+| Google Drive 전체 플로우 | 🔄 | 로그인 → Drive 동의 → 방 생성 → 업로드 → Drive 저장 |
+| OAuth 동의화면 프로덕션 전환 | 🔄 | 현재 테스트 모드 (100명 제한) |
+
+---
+
+## Google Cloud 설정
+
+### 프로젝트
+- **프로젝트**: `speech-to-text-goldenrabbit` (846392940969)
+- **서비스 계정**: `proptalk@speech-to-text-goldenrabbit.iam.gserviceaccount.com`
+
+### OAuth 클라이언트
+| 이름 | 타입 | Client ID |
+|------|------|-----------|
+| Proptalk Web | 웹 애플리케이션 | `846392940969-a7k37gkon1p451mlnhp0oj9qaok1d8o1` |
+| Proptalk App | Android | `846392940969-ro1j6gm1r9mdsmfjkfv40311l0053s5a` |
+
+### 필요 설정
+- Google Drive API: 활성화 필요
+- OAuth 동의화면: `drive.file` 스코프 추가
+- Android SHA-1: `FA:53:98:5C:4B:D3:69:C1:A2:36:87:19:A8:79:BC:E3:68:F6:D0:98`
 
 ---
 
@@ -61,19 +83,25 @@
 # 로그 확인
 pm2 logs voiceroom --lines 50
 
-# 재시작
-pm2 restart voiceroom
-
-# 환경변수 적용 재시작
+# 재시작 (환경변수 변경 시)
 cd /home/webapp/goldenrabbit/chat_stt/server
-pm2 restart voiceroom --update-env
+pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
+
+# 주의: pm2 restart --update-env 가 캐시 문제로 동작 안 할 수 있음
+# 환경변수 변경 시 delete → start 방식 권장
 ```
 
 ### 주요 설정 파일
-- `ecosystem.config.js` - PM2 환경변수 설정
+- `ecosystem.config.js` - PM2 환경변수 (GOOGLE_CLIENT_ID, CLIENT_SECRET, API 키 등)
 - `config.py` - Flask 설정
-- `routes_messages.py` - STT/업로드 로직
-- `whisper_service.py` - OpenAI Whisper API 서비스
+- `models.py` - DB 모델 (User 토큰, Room 폴더ID, AudioFile Drive 상태)
+- `auth.py` - Google OAuth + serverAuthCode 교환 + Drive 연동 API
+- `drive_service.py` - Google Drive 업로드/다운로드 (사용자 OAuth, 토큰 자동 갱신)
+- `routes_rooms.py` - 채팅방 API (방 생성 시 Drive 폴더 생성)
+- `routes_messages.py` - STT/업로드/Drive 저장 로직
+- `whisper_service.py` - OpenAI Whisper API (3GP/AMR 자동 변환)
+- `claude_service.py` - Claude 마크다운 요약
+- `cleanup_service.py` - 24시간 파일 삭제
 
 ---
 
@@ -92,11 +120,37 @@ pm2 restart voiceroom --update-env
 | 가격 | $0.006/분 (약 8원) |
 | 파일 제한 | 25MB (자동 10분 분할) |
 | 서비스 파일 | `whisper_service.py` |
+| 포맷 변환 | 3GP/AMR → MP3 자동 변환 (ffprobe + ffmpeg) |
 
-### 환경변수
+---
+
+## Google Drive 연동 ✅
+
+### 흐름
 ```
-OPENAI_API_KEY=sk-proj-...
-CLAUDE_API_KEY=sk-ant-api03-...
+Flutter 로그인 (drive.file 스코프 포함)
+  → serverAuthCode를 서버로 전송
+  → 서버가 Google에서 access_token + refresh_token 교환
+  → DB users.google_tokens에 저장
+
+방 생성 시
+  → 방장 Drive에 Proptalk/{방이름} 폴더 자동 생성
+  → rooms.drive_folder_id에 캐시
+
+음성 업로드 후
+  → STT/요약 완료 → Drive 업로드 → 서버 파일 즉시 삭제
+  → 실패 시 기존처럼 24시간 서버 보관 (fallback)
+
+다운로드 시
+  → 서버 로컬 파일 있으면 직접 전송
+  → 없으면 방장 Drive에서 프록시 다운로드
+```
+
+### DB 스키마 변경
+```sql
+ALTER TABLE users ADD COLUMN google_tokens JSONB;
+ALTER TABLE rooms ADD COLUMN drive_folder_id VARCHAR(200);
+ALTER TABLE audio_files ADD COLUMN drive_status VARCHAR(20) DEFAULT 'pending';
 ```
 
 ---
@@ -106,23 +160,28 @@ CLAUDE_API_KEY=sk-ant-api03-...
 ### 빌드 명령어
 ```bash
 cd C:\Users\ant19\projects\Proptalk\flutter
-
-# 릴리즈 APK
 flutter build apk --release
 ```
 
 ### APK 위치
 ```
-flutter\build\app\outputs\flutter-apk\app-release.apk
+flutter\build\app\outputs\flutter-apk\app-release.apk (50.7MB)
 ```
 
 ### 주요 기능
-- Google 로그인
-- 채팅방 생성/참여
-- 음성 파일 업로드 (녹음 폴더 브라우저)
-- 3초 폴링으로 실시간 메시지 업데이트
-- Optimistic Update (업로드 즉시 UI 표시)
-- 다운로드 (Download/Proptalk 폴더)
+- Google 로그인 + Drive 권한 동의
+- 채팅방 생성/참여 (방 생성 시 Drive 폴더 자동 생성)
+- 음성 파일 업로드 (MANAGE_EXTERNAL_STORAGE 권한)
+- 3초 폴링으로 실시간 메시지 + 댓글 변경 감지
+- 마크다운 요약 렌더링 (flutter_markdown)
+- 다운로드 (서버 로컬 → Drive 프록시 fallback)
+
+### 주요 패키지
+- `google_sign_in` - OAuth + drive.file 스코프
+- `flutter_markdown` - 요약 마크다운 렌더링
+- `permission_handler` - MANAGE_EXTERNAL_STORAGE
+- `record` - 녹음
+- `socket_io_client` - WebSocket
 
 ---
 
@@ -134,26 +193,31 @@ flutter\build\app\outputs\flutter-apk\app-release.apk
 
 ### 커밋 이력
 - `2026-03-02` - 초기 구현 (Whisper API, 폴링, Flutter 앱)
+- `2026-03-02` - Whisper API 전환 완료
+- `2026-03-02` - Google Drive 연동 구현
 
 ---
 
 ## 다음 단계
 
-### 우선순위 1: 전체 플로우 테스트
-- [ ] APK 설치 및 로그인 테스트
-- [ ] 음성 파일 업로드 → STT 변환 확인
-- [ ] Claude 요약 자동 생성 확인
-- [ ] 자동 댓글 달리는지 확인
+### 우선순위 1: Google Drive 연동 테스트
+- [x] DB 마이그레이션 (google_tokens, drive_folder_id, drive_status)
+- [x] 서버 코드 배포 (auth.py, drive_service.py, routes 등)
+- [x] Flutter 코드 업데이트 (drive.file 스코프, serverAuthCode)
+- [x] Google Cloud Console 설정 (Drive API, 스코프, 클라이언트)
+- [ ] 앱 로그인 → Drive 동의 → 전체 플로우 테스트
+- [ ] OAuth 동의화면 프로덕션 전환
 
-### 우선순위 2: Google Drive 연동 (선택)
-- [ ] OAuth 2.0 토큰 저장 구현
-- [ ] 방장 Drive에 자동 백업
-- [ ] 다운로드 시 Drive에서 프록시
+### 우선순위 2: 앱 출시 준비
+- [ ] 에러 핸들링 강화
+- [ ] 앱 내 이용약관/개인정보처리방침 화면
+- [ ] 음성 데이터 동의 화면
+- [ ] Google Play Console 등록
 
 ### 우선순위 3: 개선
-- [ ] 에러 핸들링 강화
 - [ ] UI/UX 개선
 - [ ] 푸시 알림 (FCM)
+- [ ] 무료 이용량 관리 로직
 
 ---
 
@@ -161,17 +225,20 @@ flutter\build\app\outputs\flutter-apk\app-release.apk
 
 ```
 Proptalk/
-├── server/                     # 백엔드
+├── server/                     # 백엔드 (원격 배포)
 │   ├── app.py
 │   ├── config.py
-│   ├── models.py
-│   ├── routes_messages.py      # STT 로직
-│   ├── whisper_service.py      # OpenAI Whisper API ⭐
-│   ├── claude_service.py       # Claude 요약
-│   ├── drive_service.py        # Google Drive (준비됨)
+│   ├── models.py               # User 토큰, Room Drive폴더, AudioFile Drive상태
+│   ├── auth.py                 # OAuth + serverAuthCode 교환 + Drive API
+│   ├── routes_rooms.py         # 방 생성 시 Drive 폴더 생성
+│   ├── routes_messages.py      # STT + Drive 업로드/삭제 로직
+│   ├── whisper_service.py      # OpenAI Whisper API + 3GP 변환
+│   ├── claude_service.py       # Claude 마크다운 요약
+│   ├── drive_service.py        # Google Drive 업로드/다운로드 (사용자 OAuth)
 │   ├── filename_parser.py
 │   ├── cleanup_service.py      # 24시간 삭제
-│   └── ecosystem.config.js
+│   ├── ecosystem.config.js     # PM2 환경변수
+│   └── deploy/                 # 배포용 파일
 │
 ├── flutter/                    # Flutter 앱
 │   ├── lib/
@@ -179,14 +246,18 @@ Proptalk/
 │   │   ├── screens/
 │   │   │   ├── login_screen.dart
 │   │   │   ├── rooms_screen.dart
-│   │   │   ├── chat_screen.dart    # 3초 폴링 추가
-│   │   │   └── audio_picker_screen.dart
+│   │   │   ├── chat_screen.dart        # 폴링 + 마크다운 렌더링
+│   │   │   └── audio_picker_screen.dart # 파일 권한 처리
 │   │   └── services/
-│   └── pubspec.yaml
+│   │       ├── auth_service.dart        # drive.file 스코프 + serverAuthCode
+│   │       ├── api_service.dart         # Drive API 메서드
+│   │       └── socket_service.dart
+│   └── pubspec.yaml                     # flutter_markdown 추가
 │
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── SETUP_GUIDE.md
+│   ├── LAUNCH_PLAN.md
 │   └── PROGRESS.md             # 이 파일
 │
 └── images/                     # 로고/아이콘
@@ -208,6 +279,38 @@ Proptalk/
 - **원인**: Whisper 로컬 실행 불가 (956MB RAM)
 - **해결**: 클라우드 API 사용 (OpenAI/Google)
 
+### 4. KeyError: 'owner_id' (2026-03-02)
+- **원인**: rooms 테이블은 `created_by` 컬럼인데 `owner_id`로 접근
+- **해결**: `room['owner_id']` → `room['created_by']` 수정
+
+### 5. 3GP 포맷 인식 실패 (2026-03-02)
+- **원인**: Android 통화 녹음이 3GP 형식이지만 .m4a 확장자로 저장됨
+- **해결**: ffprobe로 실제 포맷 감지 → ffmpeg로 MP3 변환
+
+### 6. TranscriptionSegment 객체 접근 오류 (2026-03-02)
+- **원인**: OpenAI API가 dict가 아닌 객체를 반환
+- **해결**: `seg.get('start')` → `getattr(seg, 'start', 0)`
+
+### 7. "내용 정리 중입니다" 메시지 잔류 (2026-03-02)
+- **원인**: 진행 메시지가 DB에서 삭제되지 않음
+- **해결**: Message.delete() 추가, STT 완료 후 삭제
+
+### 8. datetime JSON 직렬화 오류 (2026-03-02)
+- **원인**: socketio.emit에서 Python datetime 객체 직렬화 실패
+- **해결**: `_serialize_msg()` 헬퍼 함수 추가 (ISO 문자열 변환)
+
+### 9. 파일 접근 권한 (2026-03-02)
+- **원인**: MANAGE_EXTERNAL_STORAGE 권한 누락
+- **해결**: AndroidManifest.xml에 권한 추가, 권한 요청 UI 개선
+
+### 10. PM2 환경변수 캐시 문제 (2026-03-02)
+- **원인**: `pm2 restart --update-env`가 환경변수를 갱신하지 않음
+- **해결**: `pm2 delete` → `pm2 start ecosystem.config.js` 방식 사용
+
+### 11. OAuth audience 불일치 (2026-03-02)
+- **원인**: 서버 GOOGLE_CLIENT_ID가 옛날 프로젝트 값으로 남아있음
+- **해결**: PM2 delete → start로 환경변수 완전 갱신
+
 ---
 
 ## API 엔드포인트
@@ -215,11 +318,14 @@ Proptalk/
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | GET | /api/health | 헬스체크 |
-| POST | /api/auth/google | Google 로그인 |
+| POST | /api/auth/google | Google 로그인 + Drive 토큰 교환 |
+| GET | /api/auth/me | 현재 사용자 정보 (drive_connected 포함) |
+| GET | /api/auth/drive/status | Drive 연동 상태 |
+| POST | /api/auth/drive/disconnect | Drive 연동 해제 |
 | GET | /api/rooms | 채팅방 목록 |
-| POST | /api/rooms | 채팅방 생성 |
-| POST | /api/rooms/:id/audio | 음성 업로드 |
-| GET | /api/audio/:id/download | 음성 다운로드 |
+| POST | /api/rooms | 채팅방 생성 (Drive 폴더 자동 생성) |
+| POST | /api/rooms/:id/audio | 음성 업로드 → STT → Drive 저장 |
+| GET | /api/audio/:id/download | 음성 다운로드 (로컬 → Drive 프록시) |
 | GET | /api/rooms/:id/messages | 메시지 목록 (폴링용) |
 
 ---
@@ -229,3 +335,4 @@ Proptalk/
 - GitHub: https://github.com/cs21jeon/Proptalk
 - 서버 관리: SSH root@175.119.224.71
 - 프로젝트 경로: C:\Users\ant19\projects\Proptalk
+- Google Cloud: `speech-to-text-goldenrabbit` 프로젝트

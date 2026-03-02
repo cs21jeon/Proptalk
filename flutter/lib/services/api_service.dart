@@ -28,14 +28,19 @@ class ApiService {
   // 인증
   // ============================================================
   
-  /// Google 로그인
-  Future<Map<String, dynamic>> loginWithGoogle(String idToken) async {
+  /// Google 로그인 (serverAuthCode 포함 시 Drive 연동)
+  Future<Map<String, dynamic>> loginWithGoogle(String idToken, {String? serverAuthCode}) async {
+    final body = {'id_token': idToken};
+    if (serverAuthCode != null) {
+      body['server_auth_code'] = serverAuthCode;
+    }
+
     final response = await _client.post(
       Uri.parse('$baseUrl/api/auth/google'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'id_token': idToken}),
+      body: jsonEncode(body),
     );
-    
+
     final data = _handleResponse(response);
     _token = data['token'];
     return data;
@@ -180,6 +185,28 @@ class ApiService {
     throw ApiException('다운로드 실패', response.statusCode);
   }
   
+  // ============================================================
+  // Drive 연동
+  // ============================================================
+
+  /// Drive 연동 상태 확인
+  Future<Map<String, dynamic>> getDriveStatus() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/api/auth/drive/status'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// Drive 연동 해제
+  Future<Map<String, dynamic>> disconnectDrive() async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/auth/drive/disconnect'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
   // ============================================================
   // 응답 처리
   // ============================================================
