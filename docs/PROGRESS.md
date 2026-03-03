@@ -1,6 +1,6 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-03 (UI 개선 + 재로그인 Drive 동의 수정 + 정렬 기능)
+> 최종 업데이트: 2026-03-03 (디자인 시스템 구축 + UI 모던화 Phase 1-6)
 
 ## 프로젝트 개요
 
@@ -34,6 +34,8 @@
 24. **채팅방 정렬 기능** (생성순/이름순/참여인원순, 오름차순/내림차순) ✅ **신규**
 25. **채팅방 설정 UI 개선** (톱니바퀴 아이콘, 전체 높이 시트, 인라인 이름변경) ✅ **신규**
 26. **앱 아이콘 변경** ✅ **신규**
+27. **디자인 시스템 구축** (Pretendard 폰트 + 시맨틱 컬러 + 간격/반경 상수 + 통합 테마) ✅ **신규**
+28. **UI 모던화 Phase 1-6** (하드코딩 색상 교체, 로그인 애니메이션, 톡방 FAB 통합, 채팅 날짜구분선/메시지그룹핑, 다크모드) ✅ **신규**
 
 ---
 
@@ -78,6 +80,22 @@
 | **채팅방 정렬** | ✅ | 생성순/이름순/참여인원순 + 오름차순/내림차순 토글 |
 | **채팅방 설정 UI** | ✅ | 톱니바퀴 아이콘, 전체 높이 시트, 인라인 이름변경 |
 | **앱 아이콘 변경** | ✅ | Proptalk_icon_half size.png 적용 |
+| **디자인 시스템 구축** | ✅ | Pretendard 폰트, AppColors ThemeExtension, AppSpacing, AppTheme 통합 빌더 |
+| **하드코딩 색상 교체** | ✅ | 6개 화면 50+ Colors.xxx → 테마 토큰 전면 교체 |
+| **다크모드 토글** | ✅ | 설정 > 화면 모드 (시스템/라이트/다크), ThemeProvider + SharedPreferences |
+| **로그인 화면 애니메이션** | ✅ | fade+slide 진입 애니메이션, 그라데이션 정리 |
+| **동의 화면 진행률** | ✅ | LinearProgressIndicator + X/3 카운트 |
+| **톡방 목록 FAB 통합** | ✅ | 2개 FAB → 1개 + 바텀시트, 빈 상태 개선 |
+| **채팅 날짜 구분선** | ✅ | "2026년 3월 3일 화요일" 형태 |
+| **채팅 메시지 그룹핑** | ✅ | 같은 발신자 연속 시 이름 숨김 |
+| **Scroll-to-bottom FAB** | ✅ | 스크롤 200px 이상 시 하단 이동 버튼 |
+| **전송 버튼 애니메이션** | ✅ | AnimatedSwitcher 마이크 ↔ 원형 전송 버튼 |
+| **녹음 배너 펄스** | ✅ | 펄싱 빨간 점 애니메이션 + FilledButton |
+| **답변 카드 보더 액센트** | ✅ | transcript 컨테이너 좌측 3px primary 보더 |
+| **설정 화면 카드 그룹핑** | ✅ | 프로필 카드 확대, 섹션별 Card 래핑 |
+| **오디오 피커 개선** | ✅ | 확장자 표시 타일, ListView.separated |
+| **다크모드 채팅 버블 수정** | ✅ | primaryContainer + onPrimaryContainer 대비 개선 |
+| **SafeArea 하단 잘림 수정** | ✅ | 설정/톡방목록/오디오피커 하단 패딩 추가 |
 
 ### 테스트 진행 중 🔄
 
@@ -244,7 +262,8 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - 3초 폴링으로 실시간 메시지 + 댓글 변경 감지
 - 마크다운 요약 렌더링 (flutter_markdown)
 - 다운로드 (서버 로컬 → Drive 프록시 fallback)
-- **설정 화면** (법적 문서, 동의 관리, 계정 삭제)
+- **설정 화면** (법적 문서, 동의 관리, 계정 삭제, **다크모드 토글**)
+- **디자인 시스템** (Pretendard 폰트, 시맨틱 컬러, 통합 테마, 다크모드 지원)
 
 ### 주요 패키지
 - `google_sign_in` - OAuth + drive.file 스코프
@@ -253,7 +272,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `record` - 녹음
 - `socket_io_client` - WebSocket
 - `url_launcher` - 법적 문서 외부 링크
-- `shared_preferences` - 음성 동의 상태 로컬 저장
+- `shared_preferences` - 음성 동의 상태 + 다크모드 설정 로컬 저장
 
 ---
 
@@ -271,6 +290,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `2026-03-03` - 톡방 참여 승인 프로세스 + FAB 라벨 추가
 - `2026-03-03` - 톡방 관리 기능 + 헤더 리디자인 + 동의화면 버그 수정
 - `2026-03-03` - UI 개선 (정렬, 설정시트, 인라인 이름변경, 앱아이콘, Drive 재동의 수정)
+- `2026-03-03` - 디자인 시스템 구축 + UI 모던화 Phase 1-6 (테마/폰트/다크모드/애니메이션/SafeArea)
 
 ---
 
@@ -313,7 +333,14 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - [x] 채팅방 설정 UI 개선 (톱니바퀴, 전체높이, 인라인 이름변경)
 - [x] 앱 아이콘 변경
 - [ ] 푸시 알림 (FCM)
-- [ ] UI/UX 추가 개선
+- [x] **디자인 시스템 구축** (Pretendard 폰트 + AppColors + AppSpacing + AppTheme)
+- [x] **하드코딩 색상 전면 교체** (50+ Colors.xxx → 테마 토큰)
+- [x] **다크모드 토글** (설정 > 화면 모드)
+- [x] **로그인 화면 애니메이션** (fade+slide)
+- [x] **채팅 UX 개선** (날짜구분선, 메시지그룹핑, scroll-to-bottom, 전송 애니메이션, 녹음 펄스)
+- [x] **설정/오디오피커 UI 개선** (카드 그룹핑, 파일 타일 개선)
+- [x] **SafeArea 하단 잘림 수정** (설정/톡방목록/오디오피커)
+- [ ] UI/UX 추가 개선 (스켈레톤 로딩, 이미지 첨부 등)
 
 ---
 
@@ -338,16 +365,21 @@ Proptalk/
 │
 ├── flutter/                    # Flutter 앱
 │   ├── lib/
-│   │   ├── main.dart                    # 동의 화면 라우팅
+│   │   ├── main.dart                    # 동의 화면 라우팅 + ThemeProvider
 │   │   ├── constants/
 │   │   │   └── terms.dart               # 법적 문서 텍스트 (약관/처리방침/동의문)
+│   │   ├── theme/                       # **신규** 디자인 시스템
+│   │   │   ├── app_colors.dart          # 시맨틱 컬러 ThemeExtension (light/dark)
+│   │   │   ├── app_spacing.dart         # 간격/반경 상수
+│   │   │   ├── app_theme.dart           # 통합 테마 빌더 (light/dark)
+│   │   │   └── theme_provider.dart      # 다크모드 토글 (ChangeNotifier)
 │   │   ├── screens/
-│   │   │   ├── login_screen.dart        # 법적 문서 링크 추가
-│   │   │   ├── consent_screen.dart      # **신규** 서비스 동의 화면
-│   │   │   ├── rooms_screen.dart        # 설정 메뉴 추가
-│   │   │   ├── settings_screen.dart     # **신규** 설정 (동의/탈퇴/법적문서)
-│   │   │   ├── chat_screen.dart         # 폴링 + 마크다운 + 음성 동의
-│   │   │   └── audio_picker_screen.dart # 파일 권한 처리
+│   │   │   ├── login_screen.dart        # 애니메이션 + 법적 문서 링크
+│   │   │   ├── consent_screen.dart      # 서비스 동의 + 진행률 표시
+│   │   │   ├── rooms_screen.dart        # FAB 통합 + 헤더 확대
+│   │   │   ├── settings_screen.dart     # 카드 그룹핑 + 다크모드 토글
+│   │   │   ├── chat_screen.dart         # 날짜구분선 + 메시지그룹핑 + 전송 애니메이션
+│   │   │   └── audio_picker_screen.dart # 파일 타일 개선
 │   │   └── services/
 │   │       ├── auth_service.dart         # drive.file + 동의 상태 관리
 │   │       ├── api_service.dart          # Drive + 동의/탈퇴 API

@@ -47,7 +47,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('동의 저장 실패: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 5),
           ),
         );
@@ -152,7 +152,12 @@ class _ConsentScreenState extends State<ConsentScreen> {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+
+                    // 진행 표시
+                    _buildProgressIndicator(theme),
+
+                    const SizedBox(height: 20),
 
                     // 전체 동의
                     _buildAllAgreeCard(theme),
@@ -239,10 +244,39 @@ class _ConsentScreenState extends State<ConsentScreen> {
     );
   }
 
+  Widget _buildProgressIndicator(ThemeData theme) {
+    final count = [_termsAgreed, _privacyAgreed, _overseasAgreed]
+        .where((v) => v)
+        .length;
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: count / 3,
+              minHeight: 6,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '$count/3',
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAllAgreeCard(ThemeData theme) {
     return Card(
       elevation: 0,
-      color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+      color: theme.colorScheme.primaryContainer,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: CheckboxListTile(
         value: _allAgreed,
@@ -274,7 +308,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
   }) {
     return Card(
       elevation: 0,
-      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+      color: theme.colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:permission_handler/permission_handler.dart';
+import '../theme/app_colors.dart';
 
 /// 녹음 파일 선택 화면 - 최신순 정렬
 class AudioPickerScreen extends StatefulWidget {
@@ -15,7 +16,6 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
   List<FileSystemEntity> _audioFiles = [];
   bool _isLoading = true;
   String? _errorMessage;
-  String _currentPath = '';
   bool _showPermissionDenied = false;
 
   // 지원하는 오디오 확장자
@@ -92,7 +92,6 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
       for (final dirPath in _recordingPaths) {
         final dir = Directory(dirPath);
         if (await dir.exists()) {
-          _currentPath = dirPath;
           final files = await _scanDirectory(dir);
           allFiles.addAll(files);
         }
@@ -205,7 +204,9 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
               Icon(
                 _showPermissionDenied ? Icons.folder_off : Icons.error_outline,
                 size: 64,
-                color: _showPermissionDenied ? Colors.orange : Colors.red,
+                color: _showPermissionDenied
+                    ? Theme.of(context).extension<AppColors>()!.warning
+                    : Theme.of(context).colorScheme.error,
               ),
               const SizedBox(height: 16),
               Text(_errorMessage!, textAlign: TextAlign.center),
@@ -241,13 +242,13 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.audio_file, size: 64, color: Colors.grey),
+            Icon(Icons.audio_file, size: 64, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 16),
             const Text('녹음 파일을 찾을 수 없습니다'),
             const SizedBox(height: 8),
             Text(
               '검색 위치: ${_recordingPaths.join(", ")}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -260,43 +261,89 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
       );
     }
 
+    final theme = Theme.of(context);
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(12),
-          color: Colors.grey[100],
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
           child: Row(
             children: [
-              const Icon(Icons.info_outline, size: 16, color: Colors.grey),
+              Icon(Icons.audio_file, size: 16, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
               Text(
-                '${_audioFiles.length}개 파일 (최신순)',
-                style: const TextStyle(color: Colors.grey),
+                '${_audioFiles.length}개 파일',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '최신순',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
             ],
           ),
         ),
         Expanded(
-          child: ListView.builder(
+          child: ListView.separated(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom,
+            ),
             itemCount: _audioFiles.length,
+            separatorBuilder: (_, __) => const Divider(height: 1, indent: 68),
             itemBuilder: (context, index) {
               final file = _audioFiles[index] as File;
               final stat = file.statSync();
               final fileName = path.basename(file.path);
+              final ext = path.extension(file.path).toUpperCase().replaceFirst('.', '');
 
               return ListTile(
-                leading: const CircleAvatar(
-                  child: Icon(Icons.audio_file),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.mic, size: 18, color: theme.colorScheme.primary),
+                      Text(ext, style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary,
+                      )),
+                    ],
+                  ),
                 ),
                 title: Text(
                   fileName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 subtitle: Text(
                   '${_formatFileSize(stat.size)} · ${_formatDate(stat.modified)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: Icon(Icons.chevron_right,
+                    size: 20, color: theme.colorScheme.outline),
                 onTap: () {
                   Navigator.pop(context, file);
                 },

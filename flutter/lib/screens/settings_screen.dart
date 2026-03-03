@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../constants/terms.dart';
+import '../theme/app_colors.dart';
+import '../theme/theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -60,8 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
             ),
             child: const Text('계정 삭제'),
           ),
@@ -160,89 +162,125 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
+              padding: EdgeInsets.only(
+                left: 16, right: 16, top: 8,
+                bottom: MediaQuery.of(context).padding.bottom + 24,
+              ),
               children: [
-                // 사용자 정보
+                // 프로필 카드
                 if (user != null)
-                  ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: user['avatar_url'] != null
-                          ? NetworkImage(user['avatar_url'])
-                          : null,
-                      child: user['avatar_url'] == null
-                          ? Text(user['name']?[0] ?? '?')
-                          : null,
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundImage: user['avatar_url'] != null
+                                ? NetworkImage(user['avatar_url'])
+                                : null,
+                            child: user['avatar_url'] == null
+                                ? Text(user['name']?[0] ?? '?',
+                                    style: theme.textTheme.titleLarge)
+                                : null,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(user['name'] ?? '',
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 2),
+                                Text(user['email'] ?? '',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.outline)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    title: Text(user['name'] ?? ''),
-                    subtitle: Text(user['email'] ?? ''),
                   ),
 
-                const Divider(),
-
-                // 법적 문서
-                Padding(
-                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 4),
-                  child: Text('법적 문서',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                      )),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text('이용약관'),
-                  trailing: const Icon(Icons.open_in_new, size: 18),
-                  onTap: () => _openUrl(AppTerms.termsOfServiceUrl),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('개인정보 처리방침'),
-                  trailing: const Icon(Icons.open_in_new, size: 18),
-                  onTap: () => _openUrl(AppTerms.privacyPolicyUrl),
-                ),
-
-                const Divider(),
-
-                // 동의 관리
-                Padding(
-                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 4),
-                  child: Text('동의 관리',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                      )),
-                ),
-                if (_consentStatus != null)
-                  ...(_buildConsentItems(theme))
-                else
-                  const ListTile(
-                    title: Text('동의 정보를 불러올 수 없습니다'),
+                // 앱 설정 섹션
+                _buildSectionHeader(theme, '앱 설정'),
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      _buildThemeTile(context, theme),
+                    ],
                   ),
-
-                const Divider(),
-
-                // 계정 관리
-                Padding(
-                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 4),
-                  child: Text('계정',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                      )),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: const Text('로그아웃'),
-                  onTap: () {
-                    auth.signOut();
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text('계정 삭제',
-                      style: TextStyle(color: Colors.red)),
-                  subtitle: const Text('모든 데이터가 즉시 삭제됩니다'),
-                  onTap: _deleteAccount,
                 ),
 
-                const SizedBox(height: 24),
+                // 법적 문서 섹션
+                _buildSectionHeader(theme, '법적 문서'),
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.description_outlined),
+                        title: const Text('이용약관'),
+                        trailing: const Icon(Icons.open_in_new, size: 18),
+                        onTap: () => _openUrl(AppTerms.termsOfServiceUrl),
+                      ),
+                      const Divider(height: 1, indent: 56),
+                      ListTile(
+                        leading: const Icon(Icons.privacy_tip_outlined),
+                        title: const Text('개인정보 처리방침'),
+                        trailing: const Icon(Icons.open_in_new, size: 18),
+                        onTap: () => _openUrl(AppTerms.privacyPolicyUrl),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 동의 관리 섹션
+                _buildSectionHeader(theme, '동의 관리'),
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: _consentStatus != null
+                      ? Column(children: _buildConsentItems(theme))
+                      : const ListTile(
+                          title: Text('동의 정보를 불러올 수 없습니다'),
+                        ),
+                ),
+
+                // 계정 섹션
+                _buildSectionHeader(theme, '계정'),
+                Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.logout),
+                        title: const Text('로그아웃'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          auth.signOut();
+                          Navigator.of(context)
+                              .popUntil((route) => route.isFirst);
+                        },
+                      ),
+                      const Divider(height: 1, indent: 56),
+                      ListTile(
+                        leading: Icon(Icons.delete_forever,
+                            color: theme.colorScheme.error),
+                        title: Text('계정 삭제',
+                            style:
+                                TextStyle(color: theme.colorScheme.error)),
+                        subtitle: const Text('모든 데이터가 즉시 삭제됩니다'),
+                        onTap: _deleteAccount,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 8),
 
                 // 앱 정보
                 Center(
@@ -257,6 +295,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 24),
               ],
             ),
+    );
+  }
+
+  Widget _buildSectionHeader(ThemeData theme, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 8),
+      child: Text(title,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w600,
+          )),
+    );
+  }
+
+  Widget _buildThemeTile(BuildContext context, ThemeData theme) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final mode = themeProvider.themeMode;
+
+    String subtitle;
+    IconData icon;
+    switch (mode) {
+      case ThemeMode.light:
+        subtitle = '라이트 모드';
+        icon = Icons.light_mode;
+        break;
+      case ThemeMode.dark:
+        subtitle = '다크 모드';
+        icon = Icons.dark_mode;
+        break;
+      default:
+        subtitle = '시스템 설정';
+        icon = Icons.brightness_auto;
+    }
+
+    return ListTile(
+      leading: Icon(icon),
+      title: const Text('화면 모드'),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('화면 모드',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold)),
+                ),
+                RadioListTile<ThemeMode>(
+                  value: ThemeMode.system,
+                  groupValue: mode,
+                  title: const Text('시스템 설정'),
+                  subtitle: const Text('기기 설정에 따라 자동 전환'),
+                  secondary: const Icon(Icons.brightness_auto),
+                  onChanged: (v) {
+                    themeProvider.setThemeMode(v!);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                RadioListTile<ThemeMode>(
+                  value: ThemeMode.light,
+                  groupValue: mode,
+                  title: const Text('라이트 모드'),
+                  secondary: const Icon(Icons.light_mode),
+                  onChanged: (v) {
+                    themeProvider.setThemeMode(v!);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                RadioListTile<ThemeMode>(
+                  value: ThemeMode.dark,
+                  groupValue: mode,
+                  title: const Text('다크 모드'),
+                  secondary: const Icon(Icons.dark_mode),
+                  onChanged: (v) {
+                    themeProvider.setThemeMode(v!);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -280,10 +407,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final label = consentLabels[type] ?? type;
       final agreed = c['agreed'] == true && c['withdrawn_at'] == null;
 
+      final appColors = theme.extension<AppColors>()!;
       return ListTile(
         leading: Icon(
           agreed ? Icons.check_circle : Icons.cancel,
-          color: agreed ? Colors.green : Colors.grey,
+          color: agreed ? appColors.success : theme.colorScheme.outline,
         ),
         title: Text(label),
         subtitle: Text(agreed ? '동의함' : '철회됨'),

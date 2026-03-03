@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../theme/app_colors.dart';
 import 'chat_screen.dart';
 import 'settings_screen.dart';
 
@@ -207,33 +208,88 @@ class _RoomsScreenState extends State<RoomsScreen> {
     );
   }
   
+  void _showActionSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('채팅방',
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.add, color: Theme.of(context).colorScheme.primary),
+              ),
+              title: const Text('새 톡방 만들기'),
+              subtitle: const Text('새로운 채팅방을 만듭니다'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showCreateRoomDialog();
+              },
+            ),
+            ListTile(
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.login, color: Theme.of(context).colorScheme.secondary),
+              ),
+              title: const Text('초대코드로 참여'),
+              subtitle: const Text('기존 채팅방에 참여합니다'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showJoinRoomDialog();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final user = auth.currentUser;
     final theme = Theme.of(context);
-    
+    final appColors = theme.extension<AppColors>()!;
+
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 64,
+        toolbarHeight: 72,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset(
               'assets/images/Proptalk_transparent icon_half size.png',
-              height: 40,
-              width: 40,
+              height: 44,
+              width: 44,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text('Proptalk',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                 Text('세상 쉬운 업무 공유',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
@@ -359,25 +415,51 @@ class _RoomsScreenState extends State<RoomsScreen> {
         ? const Center(child: CircularProgressIndicator())
         : _rooms.isEmpty
           ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.chat_bubble_outline, size: 80, color: theme.colorScheme.outline),
-                  const SizedBox(height: 16),
-                  Text('아직 채팅방이 없어요', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text('새 채팅방을 만들거나 초대코드로 참여하세요',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.outline,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.chat_bubble_outline, size: 48,
+                          color: theme.colorScheme.primary.withValues(alpha: 0.6)),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    Text('아직 채팅방이 없어요',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: 8),
+                    Text('새 채팅방을 만들거나\n초대코드로 참여해 보세요',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      onPressed: () => _showActionSheet(),
+                      icon: const Icon(Icons.add),
+                      label: const Text('시작하기'),
+                    ),
+                  ],
+                ),
               ),
             )
           : RefreshIndicator(
               onRefresh: _loadRooms,
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: EdgeInsets.only(
+                  top: 8,
+                  bottom: MediaQuery.of(context).padding.bottom + 8,
+                ),
                 itemCount: _rooms.length,
                 itemBuilder: (ctx, i) {
                   final room = _rooms[i];
@@ -390,11 +472,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     child: ListTile(
                       leading: CircleAvatar(
                         backgroundColor: isPending
-                            ? Colors.orange.withOpacity(0.2)
+                            ? appColors.warningContainer
                             : theme.colorScheme.primaryContainer,
                         child: Icon(
                           isPending ? Icons.hourglass_top : Icons.group,
-                          color: isPending ? Colors.orange : theme.colorScheme.primary,
+                          color: isPending ? appColors.warning : theme.colorScheme.primary,
                         ),
                       ),
                       title: Text(room['name'] ?? '',
@@ -406,7 +488,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: isPending
-                            ? TextStyle(color: Colors.orange.shade700, fontStyle: FontStyle.italic)
+                            ? TextStyle(color: appColors.onWarningContainer, fontStyle: FontStyle.italic)
                             : null,
                       ),
                       trailing: Row(
@@ -423,7 +505,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
                               },
                               child: Icon(
                                 room['is_favorite'] == true ? Icons.star : Icons.star_border,
-                                color: room['is_favorite'] == true ? Colors.amber : theme.colorScheme.outline,
+                                color: room['is_favorite'] == true ? appColors.warning : theme.colorScheme.outline,
                                 size: 20,
                               ),
                             ),
@@ -449,11 +531,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
                                     margin: const EdgeInsets.only(top: 4),
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                     decoration: BoxDecoration(
-                                      color: Colors.orange,
+                                      color: appColors.warning,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text('$pendingCount',
-                                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                                      style: TextStyle(fontSize: 10, color: appColors.onWarning, fontWeight: FontWeight.bold)),
                                   ),
                               ],
                             ],
@@ -482,24 +564,9 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 },
               ),
             ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'join',
-            onPressed: _showJoinRoomDialog,
-            icon: const Icon(Icons.login),
-            label: const Text('참여'),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton.extended(
-            heroTag: 'create',
-            onPressed: _showCreateRoomDialog,
-            icon: const Icon(Icons.add),
-            label: const Text('새 톡방'),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showActionSheet(),
+        child: const Icon(Icons.add),
       ),
     );
   }

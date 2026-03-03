@@ -11,6 +11,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../constants/terms.dart';
+import '../theme/app_colors.dart';
 import 'audio_picker_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -38,6 +39,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isRecording = false;
   bool _isUploadingAudio = false;
   String? _typingUser;
+  bool _showScrollToBottom = false;
+  bool _hasText = false;
 
   StreamSubscription? _messageSub;
   StreamSubscription? _audioStatusSub;
@@ -56,13 +59,31 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _auth = context.read<AuthService>();
     _roomName = widget.roomName;
+    _scrollController.addListener(_onScroll);
+    _textController.addListener(_onTextChanged);
     _loadMessages();
     _setupWebSocket();
     _startPolling();
   }
 
+  void _onScroll() {
+    final show = _scrollController.hasClients && _scrollController.offset > 200;
+    if (show != _showScrollToBottom) {
+      setState(() => _showScrollToBottom = show);
+    }
+  }
+
+  void _onTextChanged() {
+    final has = _textController.text.trim().isNotEmpty;
+    if (has != _hasText) {
+      setState(() => _hasText = has);
+    }
+  }
+
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _textController.removeListener(_onTextChanged);
     _pollingTimer?.cancel();
     _messageSub?.cancel();
     _audioStatusSub?.cancel();
@@ -477,7 +498,7 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.audio_file, color: Colors.blue),
+              leading: Icon(Icons.audio_file, color: Theme.of(context).colorScheme.primary),
               title: const Text('음성 파일 선택'),
               subtitle: const Text('mp3, wav, m4a, ogg 등'),
               onTap: () {
@@ -488,7 +509,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ListTile(
               leading: Icon(
                 _isRecording ? Icons.stop_circle : Icons.mic,
-                color: _isRecording ? Colors.red : Colors.green,
+                color: _isRecording ? Theme.of(context).extension<AppColors>()!.danger : Theme.of(context).extension<AppColors>()!.success,
               ),
               title: Text(_isRecording ? '녹음 중지' : '녹음 시작'),
               subtitle: const Text('직접 녹음하여 업로드'),
@@ -665,17 +686,17 @@ class _ChatScreenState extends State<ChatScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Icon(Icons.hourglass_top, size: 20, color: Colors.orange.shade700),
+                          Icon(Icons.hourglass_top, size: 20, color: Theme.of(context).extension<AppColors>()!.warning),
                           const SizedBox(width: 4),
                           Text('승인 대기 (${currentPending.length}명)',
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Colors.orange.shade700,
+                                color: Theme.of(context).extension<AppColors>()!.warning,
                               )),
                         ],
                       ),
                       const SizedBox(height: 8),
                       ...currentPending.map((m) => Card(
-                            color: Colors.orange.withOpacity(0.05),
+                            color: Theme.of(context).extension<AppColors>()!.warningContainer.withValues(alpha: 0.3),
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundImage: m['avatar_url'] != null
@@ -691,7 +712,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.check_circle, color: Colors.green),
+                                    icon: Icon(Icons.check_circle, color: Theme.of(context).extension<AppColors>()!.success),
                                     tooltip: '승인',
                                     onPressed: () async {
                                       try {
@@ -712,7 +733,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     },
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.cancel, color: Colors.red),
+                                    icon: Icon(Icons.cancel, color: Theme.of(context).extension<AppColors>()!.danger),
                                     tooltip: '거절',
                                     onPressed: () async {
                                       try {
@@ -762,9 +783,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     const SizedBox(height: 16),
                     const Divider(),
                     ListTile(
-                      leading: Icon(Icons.exit_to_app, color: Colors.orange.shade700),
+                      leading: Icon(Icons.exit_to_app, color: Theme.of(context).extension<AppColors>()!.warning),
                       title: Text('채팅방 나가기',
-                        style: TextStyle(color: Colors.orange.shade700)),
+                        style: TextStyle(color: Theme.of(context).extension<AppColors>()!.warning)),
                       onTap: () {
                         Navigator.pop(ctx);
                         _showLeaveConfirmation();
@@ -772,9 +793,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     if (isAdmin)
                       ListTile(
-                        leading: const Icon(Icons.delete_forever, color: Colors.red),
-                        title: const Text('채팅방 삭제',
-                          style: TextStyle(color: Colors.red)),
+                        leading: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
+                        title: Text('채팅방 삭제',
+                          style: TextStyle(color: Theme.of(context).colorScheme.error)),
                         subtitle: const Text('모든 메시지가 영구 삭제됩니다'),
                         onTap: () {
                           Navigator.pop(ctx);
@@ -806,7 +827,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: const Text('취소'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).extension<AppColors>()!.warning),
             onPressed: () async {
               Navigator.pop(ctx);
               try {
@@ -838,7 +859,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: const Text('취소'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             onPressed: () async {
               Navigator.pop(ctx);
               try {
@@ -862,9 +883,51 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ============================================================
+  // 날짜 관련 헬퍼
+  // ============================================================
+  DateTime? _parseDate(dynamic dateStr) {
+    if (dateStr == null) return null;
+    try {
+      return DateTime.parse(dateStr.toString()).toLocal();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  static const _weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+
+  Widget _buildDateSeparator(DateTime date, ThemeData theme) {
+    final weekday = _weekdays[date.weekday - 1];
+    final label = '${date.year}년 ${date.month}월 ${date.day}일 ${weekday}요일';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: theme.colorScheme.outlineVariant)),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
   // 메시지 위젯 빌더
   // ============================================================
-  Widget _buildMessageItem(Map<String, dynamic> msg) {
+  Widget _buildMessageItem(Map<String, dynamic> msg, {bool showName = true}) {
     final auth = context.read<AuthService>();
     final isMe = msg['user_id'] == auth.currentUser?['id'];
     final type = msg['type'] ?? 'text';
@@ -877,7 +940,7 @@ class _ChatScreenState extends State<ChatScreen> {
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(msg['content'] ?? '',
@@ -895,8 +958,8 @@ class _ChatScreenState extends State<ChatScreen> {
         crossAxisAlignment:
             isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          // 사용자 이름
-          if (!isMe)
+          // 사용자 이름 (그룹 첫 메시지만 표시)
+          if (!isMe && showName)
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 2),
               child: Text(msg['user_name'] ?? '',
@@ -912,7 +975,7 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: isMe
-                  ? theme.colorScheme.primary
+                  ? theme.colorScheme.primaryContainer
                   : theme.colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(16),
@@ -932,13 +995,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       Icon(Icons.mic,
                           size: 18,
                           color:
-                              isMe ? Colors.white70 : theme.colorScheme.primary),
+                              isMe ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7) : theme.colorScheme.primary),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           msg['content'] ?? '',
                           style: TextStyle(
-                            color: isMe ? Colors.white : null,
+                            color: isMe ? theme.colorScheme.onPrimaryContainer : null,
                           ),
                         ),
                       ),
@@ -956,7 +1019,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             width: 14, height: 14,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: isMe ? Colors.white70 : theme.colorScheme.primary,
+                              color: isMe ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7) : theme.colorScheme.primary,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -966,7 +1029,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   : '텍스트 변환 중...',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isMe ? Colors.white60 : theme.colorScheme.outline,
+                                color: isMe ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.6) : theme.colorScheme.outline,
                               )),
                         ],
                       ),
@@ -981,7 +1044,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: isMe
-                                ? Colors.white.withOpacity(0.2)
+                                ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.15)
                                 : theme.colorScheme.primaryContainer,
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -991,7 +1054,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               Icon(Icons.download,
                                   size: 16,
                                   color: isMe
-                                      ? Colors.white
+                                      ? theme.colorScheme.onPrimaryContainer
                                       : theme.colorScheme.primary),
                               const SizedBox(width: 4),
                               Text('다운로드',
@@ -999,7 +1062,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
                                     color: isMe
-                                        ? Colors.white
+                                        ? theme.colorScheme.onPrimaryContainer
                                         : theme.colorScheme.primary,
                                   )),
                             ],
@@ -1012,7 +1075,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Text(
                     msg['content'] ?? '',
                     style: TextStyle(
-                      color: isMe ? Colors.white : null,
+                      color: isMe ? theme.colorScheme.onPrimaryContainer : null,
                       height: 1.4,
                     ),
                   ),
@@ -1036,12 +1099,16 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(height: 4),
             Container(
               margin: EdgeInsets.only(left: isMe ? 0 : 20, right: isMe ? 20 : 0),
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.only(left: 12, top: 10, right: 10, bottom: 10),
               decoration: BoxDecoration(
                 color: theme.colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+                border: Border(
+                  left: BorderSide(
+                    color: theme.colorScheme.primary,
+                    width: 3,
+                  ),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1188,25 +1255,43 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           // 녹음 중 표시
-          if (_isRecording)
-            Container(
-              width: double.infinity,
-              color: Colors.red.shade50,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.fiber_manual_record,
-                      color: Colors.red, size: 16),
-                  const SizedBox(width: 8),
-                  const Text('녹음 중...', style: TextStyle(color: Colors.red)),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: _toggleRecording,
-                    child: const Text('중지 및 업로드'),
-                  ),
-                ],
-              ),
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            child: _isRecording
+                ? Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: theme.extension<AppColors>()!.dangerContainer,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: theme.extension<AppColors>()!.danger.withValues(alpha: 0.3),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        _PulsingDot(color: theme.extension<AppColors>()!.danger),
+                        const SizedBox(width: 10),
+                        Text('녹음 중...', style: TextStyle(
+                          color: theme.extension<AppColors>()!.danger,
+                          fontWeight: FontWeight.w500,
+                        )),
+                        const Spacer(),
+                        FilledButton.tonal(
+                          onPressed: _toggleRecording,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.extension<AppColors>()!.danger,
+                            foregroundColor: theme.extension<AppColors>()!.onDanger,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          child: const Text('중지 및 업로드'),
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
 
           // 업로드 중 표시
           if (_isUploadingAudio)
@@ -1214,7 +1299,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // 메시지 리스트
           Expanded(
-            child: _isLoading
+            child: Stack(
+              children: [
+                _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _messages.isEmpty
                     ? Center(
@@ -1242,9 +1329,60 @@ class _ChatScreenState extends State<ChatScreen> {
                         itemCount: _messages.length,
                         itemBuilder: (ctx, i) {
                           final msg = Map<String, dynamic>.from(_messages[i]);
-                          return _buildMessageItem(msg);
+
+                          // 날짜 구분선: 다음 메시지(reverse이므로 i+1)와 날짜 비교
+                          Widget? dateSeparator;
+                          if (i < _messages.length - 1) {
+                            final nextMsg = _messages[i + 1];
+                            final curDate = _parseDate(msg['created_at']);
+                            final nextDate = _parseDate(nextMsg['created_at']);
+                            if (curDate != null && nextDate != null && !_isSameDay(curDate, nextDate)) {
+                              dateSeparator = _buildDateSeparator(curDate, theme);
+                            }
+                          } else if (i == _messages.length - 1) {
+                            final curDate = _parseDate(msg['created_at']);
+                            if (curDate != null) {
+                              dateSeparator = _buildDateSeparator(curDate, theme);
+                            }
+                          }
+
+                          // 메시지 그룹핑: 같은 발신자 연속이면 이름 숨김
+                          bool showName = true;
+                          if (i < _messages.length - 1) {
+                            final prevMsg = _messages[i + 1]; // reverse이므로 i+1이 "이전"
+                            if (prevMsg['user_id'] == msg['user_id'] &&
+                                prevMsg['type'] != 'system' &&
+                                msg['type'] != 'system') {
+                              final curDate = _parseDate(msg['created_at']);
+                              final prevDate = _parseDate(prevMsg['created_at']);
+                              if (curDate != null && prevDate != null && _isSameDay(curDate, prevDate)) {
+                                showName = false;
+                              }
+                            }
+                          }
+
+                          return Column(
+                            children: [
+                              if (dateSeparator != null) dateSeparator,
+                              _buildMessageItem(msg, showName: showName),
+                            ],
+                          );
                         },
                       ),
+                // Scroll-to-bottom FAB
+                if (_showScrollToBottom)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: FloatingActionButton.small(
+                      onPressed: _scrollToBottom,
+                      heroTag: 'scrollToBottom',
+                      elevation: 2,
+                      child: const Icon(Icons.keyboard_arrow_down),
+                    ),
+                  ),
+              ],
+            ),
           ),
 
           // 입력 영역
@@ -1253,7 +1391,7 @@ class _ChatScreenState extends State<ChatScreen> {
               color: theme.colorScheme.surface,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -1269,7 +1407,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     IconButton(
                       icon: Icon(
                         _isRecording ? Icons.stop_circle : Icons.add_circle_outline,
-                        color: _isRecording ? Colors.red : theme.colorScheme.primary,
+                        color: _isRecording ? theme.extension<AppColors>()!.danger : theme.colorScheme.primary,
                       ),
                       onPressed: _isRecording ? _toggleRecording : _showAttachMenu,
                     ),
@@ -1310,11 +1448,32 @@ class _ChatScreenState extends State<ChatScreen> {
 
                     const SizedBox(width: 4),
 
-                    // 전송 버튼
-                    IconButton(
-                      icon: Icon(Icons.send_rounded,
-                          color: theme.colorScheme.primary),
-                      onPressed: _isSending ? null : _sendTextMessage,
+                    // 전송 버튼 (AnimatedSwitcher)
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      transitionBuilder: (child, anim) =>
+                          ScaleTransition(scale: anim, child: child),
+                      child: _hasText
+                          ? IconButton(
+                              key: const ValueKey('send'),
+                              icon: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.arrow_upward_rounded,
+                                    color: theme.colorScheme.onPrimary, size: 20),
+                              ),
+                              onPressed: _isSending ? null : _sendTextMessage,
+                            )
+                          : IconButton(
+                              key: const ValueKey('mic'),
+                              icon: Icon(Icons.mic_outlined,
+                                  color: theme.colorScheme.outline),
+                              onPressed: _showAttachMenu,
+                            ),
                     ),
                   ],
                 ),
@@ -1330,10 +1489,6 @@ class _ChatScreenState extends State<ChatScreen> {
   // 음성 파일 검색 다이얼로그
   // ============================================================
   void _showAudioSearch() {
-    final phoneCtrl = TextEditingController();
-    final dateFromCtrl = TextEditingController();
-    final dateToCtrl = TextEditingController();
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1448,11 +1603,57 @@ class _AudioSearchSheetState extends State<_AudioSearchSheet> {
                     ),
                     isThreeLine: true,
                     trailing: audio['drive_url'] != null
-                        ? const Icon(Icons.cloud_done, color: Colors.green)
+                        ? Icon(Icons.cloud_done, color: Theme.of(context).extension<AppColors>()!.success)
                         : null,
                   ),
                 )),
         ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 녹음 중 펄스 점
+// ============================================================
+class _PulsingDot extends StatefulWidget {
+  final Color color;
+  const _PulsingDot({required this.color});
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.3, end: 1.0).animate(_ctrl),
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: widget.color,
+          shape: BoxShape.circle,
+        ),
       ),
     );
   }
