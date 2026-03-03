@@ -1,6 +1,6 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-02 (Google Drive 연동 구현)
+> 최종 업데이트: 2026-03-03 (UI 개선 + 재로그인 Drive 동의 수정 + 정렬 기능)
 
 ## 프로젝트 개요
 
@@ -15,9 +15,25 @@
 5. Claude API 요약 (**마크다운 구조화**) ✅
 6. 자동 댓글 (MarkdownBody 렌더링) ✅
 7. 파일명 파싱 (전화번호/날짜/이름) ✅
-8. **Google Drive 자동 저장** (방장 드라이브) ✅ **신규**
-9. Drive 프록시 다운로드 ✅ **신규**
+8. Google Drive 자동 저장 (방장 드라이브) ✅
+9. Drive 프록시 다운로드 ✅
 10. 3초 폴링 실시간 업데이트 ✅
+11. **서비스 이용 동의 화면** (약관/개인정보/국외이전) ✅ **신규**
+12. **음성 데이터 처리 동의 팝업** ✅ **신규**
+13. **접속기록 감사 로그** (3개월 보관) ✅ **신규**
+14. **RBAC 권한 강화** (admin/member 역할 적용) ✅ **신규**
+15. **회원 탈퇴 + 동의 철회** ✅ **신규**
+16. **설정 화면** (법적 문서, 동의 관리, 계정 삭제) ✅ **신규**
+17. **톡방 참여 승인 프로세스** (방장 승인/거절) ✅ **신규**
+18. **FAB 라벨** ("참여", "새 톡방") ✅ **신규**
+19. **톡방 관리 기능** (삭제/이름변경/나가기/즐겨찾기) ✅ **신규**
+20. **헤더 리디자인** (Proptalk 아이콘 + 태그라인) ✅ **신규**
+21. **동의화면 버그 수정** (재로그인 시 동의화면 재표시 방지) ✅ **신규**
+22. **관리자 권한 이전** (방장 변경 기능) ✅ **신규**
+23. **재로그인 Drive 동의 반복 수정** ✅ **신규**
+24. **채팅방 정렬 기능** (생성순/이름순/참여인원순, 오름차순/내림차순) ✅ **신규**
+25. **채팅방 설정 UI 개선** (톱니바퀴 아이콘, 전체 높이 시트, 인라인 이름변경) ✅ **신규**
+26. **앱 아이콘 변경** ✅ **신규**
 
 ---
 
@@ -41,6 +57,27 @@
 | **Drive 프록시 다운로드** | ✅ | 서버 로컬 없으면 Drive에서 다운로드 |
 | **3초 폴링** | ✅ | 실시간 메시지 + 댓글 내용 변경 감지 |
 | **GitHub 커밋** | ✅ | cs21jeon/Proptalk |
+| **서비스 동의 화면** | ✅ | 약관/개인정보/국외이전 3항목 필수 동의 |
+| **음성 처리 동의 팝업** | ✅ | 첫 업로드 시 표시, SharedPreferences + DB 저장 |
+| **접속기록 감사 로그** | ✅ | access_logs 테이블, 3개월 보관 후 자동 삭제 |
+| **RBAC 권한 강화** | ✅ | room_role_required 데코레이터, admin/member 역할 적용 |
+| **회원 탈퇴** | ✅ | CASCADE 삭제, Drive 파일 보존 |
+| **동의 철회 UI** | ✅ | 설정 화면에서 각 동의 항목별 철회 가능 |
+| **설정 화면** | ✅ | 법적 문서 링크, 동의 관리, 계정 삭제, 로그아웃 |
+| **톡방 참여 승인** | ✅ | 초대코드 참여 → pending → 방장 승인/거절 |
+| **FAB 라벨** | ✅ | "참여", "새 톡방" 텍스트 표시 |
+| **톡방 삭제** | ✅ | admin 전용, CASCADE 삭제 |
+| **톡방 이름 변경** | ✅ | admin 전용, 시스템 메시지 생성 |
+| **톡방 나가기** | ✅ | 유일 admin 보호 로직 (이전 필요 또는 방 자동 삭제) |
+| **즐겨찾기** | ✅ | 별 아이콘 토글, 즐겨찾기 우선 정렬 |
+| **관리자 권한 이전** | ✅ | 다른 멤버에게 admin 이전 |
+| **헤더 리디자인** | ✅ | Proptalk 아이콘 + 텍스트 + "세상 쉬운 업무 공유" 태그라인 |
+| **동의화면 버그 수정** | ✅ | signOut() 시 consent 상태 초기화 |
+| **승인 대기 UI** | ✅ | 방 목록: 모래시계+뱃지, 방 정보: 승인/거절 버튼 |
+| **재로그인 Drive 동의 수정** | ✅ | forceCodeForRefreshToken 제거, 재로그인 시 Drive 동의 반복 방지 |
+| **채팅방 정렬** | ✅ | 생성순/이름순/참여인원순 + 오름차순/내림차순 토글 |
+| **채팅방 설정 UI** | ✅ | 톱니바퀴 아이콘, 전체 높이 시트, 인라인 이름변경 |
+| **앱 아이콘 변경** | ✅ | Proptalk_icon_half size.png 적용 |
 
 ### 테스트 진행 중 🔄
 
@@ -48,6 +85,7 @@
 |------|------|--------|
 | Google Drive 전체 플로우 | 🔄 | 로그인 → Drive 동의 → 방 생성 → 업로드 → Drive 저장 |
 | OAuth 동의화면 프로덕션 전환 | 🔄 | 현재 테스트 모드 (100명 제한) |
+| 법적 컴플라이언스 전체 플로우 | 🔄 | 로그인 → 동의 화면 → 음성 동의 → 설정/철회 |
 
 ---
 
@@ -94,14 +132,14 @@ pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
 ### 주요 설정 파일
 - `ecosystem.config.js` - PM2 환경변수 (GOOGLE_CLIENT_ID, CLIENT_SECRET, API 키 등)
 - `config.py` - Flask 설정
-- `models.py` - DB 모델 (User 토큰, Room 폴더ID, AudioFile Drive 상태)
-- `auth.py` - Google OAuth + serverAuthCode 교환 + Drive 연동 API
+- `models.py` - DB 모델 (User 토큰, Room 폴더ID, AudioFile Drive, **UserConsent, AccessLog**)
+- `auth.py` - Google OAuth + Drive + **동의 API + RBAC 데코레이터 + 계정 삭제**
 - `drive_service.py` - Google Drive 업로드/다운로드 (사용자 OAuth, 토큰 자동 갱신)
-- `routes_rooms.py` - 채팅방 API (방 생성 시 Drive 폴더 생성)
-- `routes_messages.py` - STT/업로드/Drive 저장 로직
+- `routes_rooms.py` - 채팅방 API + Drive 폴더 + **멤버 관리/승인/거절 + 삭제/이름변경/나가기/즐겨찾기 + 감사 로그**
+- `routes_messages.py` - STT/업로드/Drive 저장 + **감사 로그**
 - `whisper_service.py` - OpenAI Whisper API (3GP/AMR 자동 변환)
 - `claude_service.py` - Claude 마크다운 요약
-- `cleanup_service.py` - 24시간 파일 삭제
+- `cleanup_service.py` - 24시간 파일 삭제 + **3개월 초과 감사 로그 삭제**
 
 ---
 
@@ -151,6 +189,35 @@ Flutter 로그인 (drive.file 스코프 포함)
 ALTER TABLE users ADD COLUMN google_tokens JSONB;
 ALTER TABLE rooms ADD COLUMN drive_folder_id VARCHAR(200);
 ALTER TABLE audio_files ADD COLUMN drive_status VARCHAR(20) DEFAULT 'pending';
+
+-- 톡방 참여 승인 + 즐겨찾기 (2026-03-03)
+ALTER TABLE room_members ADD COLUMN status VARCHAR(20) DEFAULT 'active';  -- active/pending
+ALTER TABLE room_members ADD COLUMN is_favorite BOOLEAN DEFAULT false;
+
+-- 법적 컴플라이언스 (2026-03-03)
+CREATE TABLE user_consents (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    consent_type VARCHAR(50) NOT NULL,  -- terms/privacy/overseas_transfer/audio_processing
+    version VARCHAR(20) NOT NULL,
+    agreed BOOLEAN NOT NULL DEFAULT true,
+    agreed_at TIMESTAMP DEFAULT NOW(),
+    withdrawn_at TIMESTAMP,
+    ip_address VARCHAR(50),
+    user_agent TEXT
+);
+
+CREATE TABLE access_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER,
+    action VARCHAR(50) NOT NULL,
+    resource_type VARCHAR(30),
+    resource_id INTEGER,
+    ip_address VARCHAR(50),
+    user_agent TEXT,
+    details JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 ```
 
 ---
@@ -165,16 +232,19 @@ flutter build apk --release
 
 ### APK 위치
 ```
-flutter\build\app\outputs\flutter-apk\app-release.apk (50.7MB)
+flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 ```
 
 ### 주요 기능
 - Google 로그인 + Drive 권한 동의
+- **서비스 동의 화면** (약관/개인정보/국외이전 필수 동의)
 - 채팅방 생성/참여 (방 생성 시 Drive 폴더 자동 생성)
 - 음성 파일 업로드 (MANAGE_EXTERNAL_STORAGE 권한)
+- **음성 데이터 처리 동의** (첫 업로드 시 팝업)
 - 3초 폴링으로 실시간 메시지 + 댓글 변경 감지
 - 마크다운 요약 렌더링 (flutter_markdown)
 - 다운로드 (서버 로컬 → Drive 프록시 fallback)
+- **설정 화면** (법적 문서, 동의 관리, 계정 삭제)
 
 ### 주요 패키지
 - `google_sign_in` - OAuth + drive.file 스코프
@@ -182,6 +252,8 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (50.7MB)
 - `permission_handler` - MANAGE_EXTERNAL_STORAGE
 - `record` - 녹음
 - `socket_io_client` - WebSocket
+- `url_launcher` - 법적 문서 외부 링크
+- `shared_preferences` - 음성 동의 상태 로컬 저장
 
 ---
 
@@ -195,6 +267,10 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (50.7MB)
 - `2026-03-02` - 초기 구현 (Whisper API, 폴링, Flutter 앱)
 - `2026-03-02` - Whisper API 전환 완료
 - `2026-03-02` - Google Drive 연동 구현
+- `2026-03-03` - 법적 컴플라이언스 구현 (동의/감사로그/RBAC/탈퇴/설정)
+- `2026-03-03` - 톡방 참여 승인 프로세스 + FAB 라벨 추가
+- `2026-03-03` - 톡방 관리 기능 + 헤더 리디자인 + 동의화면 버그 수정
+- `2026-03-03` - UI 개선 (정렬, 설정시트, 인라인 이름변경, 앱아이콘, Drive 재동의 수정)
 
 ---
 
@@ -208,16 +284,36 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (50.7MB)
 - [ ] 앱 로그인 → Drive 동의 → 전체 플로우 테스트
 - [ ] OAuth 동의화면 프로덕션 전환
 
-### 우선순위 2: 앱 출시 준비
-- [ ] 에러 핸들링 강화
-- [ ] 앱 내 이용약관/개인정보처리방침 화면
-- [ ] 음성 데이터 동의 화면
-- [ ] Google Play Console 등록
+### 우선순위 2: 법적 컴플라이언스 ✅ 완료 (2026-03-03)
+- [x] 서비스 이용 동의 화면 (약관/개인정보/국외이전)
+- [x] 음성 데이터 처리 동의 팝업
+- [x] 동의 이력 DB 저장 (user_consents 테이블)
+- [x] 접속기록 감사 로그 (access_logs 테이블, 3개월 보관)
+- [x] RBAC 권한 강화 (admin/member 역할 적용)
+- [x] 회원 탈퇴 기능 (CASCADE 삭제)
+- [x] 동의 철회 UI (설정 화면)
+- [x] 앱 내 이용약관/개인정보처리방침 열람
+- [x] 설정 화면 (법적 문서, 동의 관리, 계정 삭제)
+- [x] 서버 배포 (DB 마이그레이션 + 코드 배포 완료)
 
-### 우선순위 3: 개선
-- [ ] UI/UX 개선
-- [ ] 푸시 알림 (FCM)
+### 우선순위 3: 앱 출시 준비
+- [ ] 에러 핸들링 강화
+- [ ] Google Play Console 등록
 - [ ] 무료 이용량 관리 로직
+
+### 우선순위 4: 개선
+- [x] FAB 라벨 추가 ("참여", "새 톡방")
+- [x] 톡방 참여 승인 프로세스 (pending → 방장 승인/거절)
+- [x] 승인 대기 UI (방 목록 뱃지 + 방 정보 승인/거절)
+- [x] 톡방 관리 기능 (삭제/이름변경/나가기/즐겨찾기/관리자이전)
+- [x] 헤더 리디자인 (Proptalk 아이콘 + 태그라인)
+- [x] 동의화면 재표시 버그 수정
+- [x] 재로그인 Drive 동의 반복 수정
+- [x] 채팅방 정렬 기능 (생성순/이름순/참여인원순 + 오름차순/내림차순)
+- [x] 채팅방 설정 UI 개선 (톱니바퀴, 전체높이, 인라인 이름변경)
+- [x] 앱 아이콘 변경
+- [ ] 푸시 알림 (FCM)
+- [ ] UI/UX 추가 개선
 
 ---
 
@@ -242,17 +338,21 @@ Proptalk/
 │
 ├── flutter/                    # Flutter 앱
 │   ├── lib/
-│   │   ├── main.dart
+│   │   ├── main.dart                    # 동의 화면 라우팅
+│   │   ├── constants/
+│   │   │   └── terms.dart               # 법적 문서 텍스트 (약관/처리방침/동의문)
 │   │   ├── screens/
-│   │   │   ├── login_screen.dart
-│   │   │   ├── rooms_screen.dart
-│   │   │   ├── chat_screen.dart        # 폴링 + 마크다운 렌더링
+│   │   │   ├── login_screen.dart        # 법적 문서 링크 추가
+│   │   │   ├── consent_screen.dart      # **신규** 서비스 동의 화면
+│   │   │   ├── rooms_screen.dart        # 설정 메뉴 추가
+│   │   │   ├── settings_screen.dart     # **신규** 설정 (동의/탈퇴/법적문서)
+│   │   │   ├── chat_screen.dart         # 폴링 + 마크다운 + 음성 동의
 │   │   │   └── audio_picker_screen.dart # 파일 권한 처리
 │   │   └── services/
-│   │       ├── auth_service.dart        # drive.file 스코프 + serverAuthCode
-│   │       ├── api_service.dart         # Drive API 메서드
+│   │       ├── auth_service.dart         # drive.file + 동의 상태 관리
+│   │       ├── api_service.dart          # Drive + 동의/탈퇴 API
 │   │       └── socket_service.dart
-│   └── pubspec.yaml                     # flutter_markdown 추가
+│   └── pubspec.yaml                      # url_launcher 추가
 │
 ├── docs/
 │   ├── ARCHITECTURE.md
@@ -318,12 +418,28 @@ Proptalk/
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | GET | /api/health | 헬스체크 |
-| POST | /api/auth/google | Google 로그인 + Drive 토큰 교환 |
+| POST | /api/auth/google | Google 로그인 + Drive 토큰 교환 (**consent_required 포함**) |
 | GET | /api/auth/me | 현재 사용자 정보 (drive_connected 포함) |
 | GET | /api/auth/drive/status | Drive 연동 상태 |
 | POST | /api/auth/drive/disconnect | Drive 연동 해제 |
+| **POST** | **/api/auth/consent** | **동의 기록 저장** |
+| **GET** | **/api/auth/consent/status** | **현재 동의 상태 조회** |
+| **POST** | **/api/auth/consent/withdraw** | **동의 철회** |
+| **DELETE** | **/api/auth/account** | **회원 탈퇴 (CASCADE 삭제)** |
 | GET | /api/rooms | 채팅방 목록 |
 | POST | /api/rooms | 채팅방 생성 (Drive 폴더 자동 생성) |
+| GET | /api/rooms/:id | 채팅방 상세 정보 |
+| POST | /api/rooms/join | 초대코드로 참여 |
+| GET | /api/rooms/:id/members | 멤버 목록 |
+| **DELETE** | **/api/rooms/:id/members/:uid** | **멤버 추방 (admin 전용)** |
+| **GET** | **/api/rooms/:id/members/pending** | **승인 대기 멤버 목록 (admin)** |
+| **POST** | **/api/rooms/:id/members/:uid/approve** | **멤버 승인 (admin)** |
+| **POST** | **/api/rooms/:id/members/:uid/reject** | **멤버 거절 (admin)** |
+| **DELETE** | **/api/rooms/:id** | **톡방 삭제 (admin, CASCADE)** |
+| **PATCH** | **/api/rooms/:id** | **톡방 이름 변경 (admin)** |
+| **POST** | **/api/rooms/:id/leave** | **톡방 나가기** |
+| **POST** | **/api/rooms/:id/transfer-admin** | **관리자 권한 이전 (admin)** |
+| **POST** | **/api/rooms/:id/favorite** | **즐겨찾기 토글** |
 | POST | /api/rooms/:id/audio | 음성 업로드 → STT → Drive 저장 |
 | GET | /api/audio/:id/download | 음성 다운로드 (로컬 → Drive 프록시) |
 | GET | /api/rooms/:id/messages | 메시지 목록 (폴링용) |

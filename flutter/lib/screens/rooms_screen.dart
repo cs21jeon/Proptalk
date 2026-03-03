@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'chat_screen.dart';
+import 'settings_screen.dart';
 
 class RoomsScreen extends StatefulWidget {
   const RoomsScreen({super.key});
@@ -15,6 +16,8 @@ class RoomsScreen extends StatefulWidget {
 class _RoomsScreenState extends State<RoomsScreen> {
   List<dynamic> _rooms = [];
   bool _isLoading = true;
+  String _sortBy = 'recent'; // recent, name, members
+  bool _sortAsc = false; // false=내림차순, true=오름차순
   
   @override
   void initState() {
@@ -34,7 +37,35 @@ class _RoomsScreenState extends State<RoomsScreen> {
         );
       }
     }
-    if (mounted) setState(() => _isLoading = false);
+    if (mounted) {
+      _sortRooms();
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _sortRooms() {
+    _rooms.sort((a, b) {
+      // 즐겨찾기 항상 우선
+      final aFav = a['is_favorite'] == true ? 0 : 1;
+      final bFav = b['is_favorite'] == true ? 0 : 1;
+      if (aFav != bFav) return aFav.compareTo(bFav);
+
+      int result;
+      switch (_sortBy) {
+        case 'name':
+          result = (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString());
+          break;
+        case 'members':
+          result = (a['member_count'] ?? 0).compareTo(b['member_count'] ?? 0);
+          break;
+        default: // recent - 생성순
+          final aDate = (a['created_at'] ?? '').toString();
+          final bDate = (b['created_at'] ?? '').toString();
+          result = aDate.compareTo(bDate);
+          break;
+      }
+      return _sortAsc ? result : -result;
+    });
   }
   
   void _showCreateRoomDialog() {
@@ -141,14 +172,24 @@ class _RoomsScreenState extends State<RoomsScreen> {
             onPressed: () async {
               if (codeController.text.trim().isEmpty) return;
               Navigator.pop(ctx);
-              
+
               try {
                 final api = context.read<ApiService>();
-                await api.joinRoom(codeController.text.trim());
+                final result = await api.joinRoom(codeController.text.trim());
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('채팅방에 참여했습니다!')),
-                  );
+                  final status = result['status'] ?? 'active';
+                  if (status == 'pending') {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('참여 신청 완료! 방장의 승인을 기다려 주세요.'),
+                        duration: Duration(seconds: 4),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(result['message'] ?? '채팅방에 참여했습니다!')),
+                    );
+                  }
                 }
                 _loadRooms();
               } catch (e) {
@@ -174,8 +215,90 @@ class _RoomsScreenState extends State<RoomsScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Proptalk'),
+        toolbarHeight: 64,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/images/Proptalk_transparent icon_half size.png',
+              height: 40,
+              width: 40,
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Proptalk',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                Text('세상 쉬운 업무 공유',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            tooltip: '정렬',
+            onSelected: (value) {
+              setState(() {
+                if (value == 'toggle_order') {
+                  _sortAsc = !_sortAsc;
+                } else {
+                  _sortBy = value;
+                }
+                _sortRooms();
+              });
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'recent',
+                child: Row(
+                  children: [
+                    Icon(_sortBy == 'recent' ? Icons.check : Icons.access_time, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('생성순'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'name',
+                child: Row(
+                  children: [
+                    Icon(_sortBy == 'name' ? Icons.check : Icons.sort_by_alpha, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('이름순'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'members',
+                child: Row(
+                  children: [
+                    Icon(_sortBy == 'members' ? Icons.check : Icons.people, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('참여인원순'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'toggle_order',
+                child: Row(
+                  children: [
+                    Icon(_sortAsc ? Icons.arrow_upward : Icons.arrow_downward, size: 20),
+                    const SizedBox(width: 8),
+                    Text(_sortAsc ? '오름차순' : '내림차순'),
+                  ],
+                ),
+              ),
+            ],
+          ),
           if (user != null)
             PopupMenuButton<String>(
               icon: CircleAvatar(
@@ -189,6 +312,11 @@ class _RoomsScreenState extends State<RoomsScreen> {
               onSelected: (value) {
                 if (value == 'logout') {
                   auth.signOut();
+                } else if (value == 'settings') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  );
                 }
               },
               itemBuilder: (ctx) => <PopupMenuEntry<String>>[
@@ -203,9 +331,19 @@ class _RoomsScreenState extends State<RoomsScreen> {
                   child: Text(user['email'] ?? '', style: const TextStyle(fontSize: 12)),
                 ),
                 const PopupMenuDivider(),
-                PopupMenuItem<String>(
+                const PopupMenuItem<String>(
+                  value: 'settings',
+                  child: Row(
+                    children: [
+                      Icon(Icons.settings, size: 20),
+                      SizedBox(width: 8),
+                      Text('설정'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
                   value: 'logout',
-                  child: const Row(
+                  child: Row(
                     children: [
                       Icon(Icons.logout, size: 20),
                       SizedBox(width: 8),
@@ -243,38 +381,92 @@ class _RoomsScreenState extends State<RoomsScreen> {
                 itemCount: _rooms.length,
                 itemBuilder: (ctx, i) {
                   final room = _rooms[i];
+                  final myStatus = room['my_status'] ?? 'active';
+                  final isPending = myStatus == 'pending';
+                  final pendingCount = room['pending_count'] ?? 0;
+
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     child: ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: theme.colorScheme.primaryContainer,
-                        child: Icon(Icons.group, color: theme.colorScheme.primary),
+                        backgroundColor: isPending
+                            ? Colors.orange.withOpacity(0.2)
+                            : theme.colorScheme.primaryContainer,
+                        child: Icon(
+                          isPending ? Icons.hourglass_top : Icons.group,
+                          color: isPending ? Colors.orange : theme.colorScheme.primary,
+                        ),
                       ),
-                      title: Text(room['name'] ?? '', 
+                      title: Text(room['name'] ?? '',
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                       subtitle: Text(
-                        room['last_message'] ?? room['description'] ?? '',
+                        isPending
+                            ? '승인 대기 중'
+                            : room['last_message'] ?? room['description'] ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: isPending
+                            ? TextStyle(color: Colors.orange.shade700, fontStyle: FontStyle.italic)
+                            : null,
                       ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('${room['member_count'] ?? 0}명',
-                            style: theme.textTheme.bodySmall),
-                          if (room['role'] == 'admin')
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
+                          if (!isPending)
+                            GestureDetector(
+                              onTap: () async {
+                                try {
+                                  final api = context.read<ApiService>();
+                                  await api.toggleFavorite(room['id']);
+                                  _loadRooms();
+                                } catch (_) {}
+                              },
+                              child: Icon(
+                                room['is_favorite'] == true ? Icons.star : Icons.star_border,
+                                color: room['is_favorite'] == true ? Colors.amber : theme.colorScheme.outline,
+                                size: 20,
                               ),
-                              child: Text('관리자', 
-                                style: TextStyle(fontSize: 10, color: theme.colorScheme.primary)),
                             ),
+                          const SizedBox(width: 8),
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (!isPending)
+                                Text('${room['member_count'] ?? 0}명',
+                                  style: theme.textTheme.bodySmall),
+                              if (room['role'] == 'admin') ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text('관리자',
+                                    style: TextStyle(fontSize: 10, color: theme.colorScheme.primary)),
+                                ),
+                                if (pendingCount > 0)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text('$pendingCount',
+                                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ),
+                              ],
+                            ],
+                          ),
                         ],
                       ),
                       onTap: () {
+                        if (isPending) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('방장의 승인을 기다리고 있습니다.')),
+                          );
+                          return;
+                        }
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -292,19 +484,20 @@ class _RoomsScreenState extends State<RoomsScreen> {
             ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          FloatingActionButton.small(
+          FloatingActionButton.extended(
             heroTag: 'join',
             onPressed: _showJoinRoomDialog,
-            tooltip: '초대코드로 참여',
-            child: const Icon(Icons.login),
+            icon: const Icon(Icons.login),
+            label: const Text('참여'),
           ),
           const SizedBox(height: 8),
-          FloatingActionButton(
+          FloatingActionButton.extended(
             heroTag: 'create',
             onPressed: _showCreateRoomDialog,
-            tooltip: '새 채팅방',
-            child: const Icon(Icons.add),
+            icon: const Icon(Icons.add),
+            label: const Text('새 톡방'),
           ),
         ],
       ),

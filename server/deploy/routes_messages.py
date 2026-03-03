@@ -11,7 +11,7 @@ import threading
 from flask import request, jsonify, g, send_file, Response
 from werkzeug.utils import secure_filename
 from auth import login_required
-from models import Room, Message, AudioFile, User
+from models import Room, Message, AudioFile, User, AccessLog
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -130,6 +130,11 @@ def register_message_routes(app, socketio):
                 owner_tokens = owner['google_tokens']
             room_drive_folder_id = room.get('drive_folder_id')
 
+        # 감사 로그
+        AccessLog.log(g.user_id, 'upload', 'audio', audio['id'],
+                      request.remote_addr, request.headers.get('User-Agent'),
+                      details={'filename': original_filename, 'room_id': room_id, 'file_size': file_size})
+
         thread = threading.Thread(
             target=process_audio_background,
             args=(app, socketio, filepath, audio['id'], msg['id'], room_id,
@@ -182,6 +187,11 @@ def register_message_routes(app, socketio):
 
         if not Room.is_member(audio['room_id'], g.user_id):
             return jsonify({'error': '접근 권한이 없습니다'}), 403
+
+        # 감사 로그
+        AccessLog.log(g.user_id, 'download', 'audio', audio_id,
+                      request.remote_addr, request.headers.get('User-Agent'),
+                      details={'room_id': audio['room_id']})
 
         original_filename = audio['original_filename']
         ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'mp3'

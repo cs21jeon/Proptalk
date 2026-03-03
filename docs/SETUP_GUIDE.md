@@ -13,6 +13,9 @@ GRANT ALL PRIVILEGES ON DATABASE voiceroom TO goldenrabbit;
 
 # 테이블 생성
 psql -U goldenrabbit -d voiceroom -f init_db.sql
+
+# 법적 컴플라이언스 마이그레이션 (user_consents, access_logs)
+psql -U goldenrabbit -d voiceroom -f server/deploy/migrate_consents.sql
 ```
 
 ## 2단계: Google Cloud 설정
@@ -212,3 +215,6 @@ flutter run
 - **토큰 갱신**: access_token 1시간 만료, refresh_token으로 자동 갱신
 - **보안**: JWT_SECRET, SECRET_KEY, GOOGLE_CLIENT_SECRET 절대 git에 커밋하지 말 것
 - **PM2**: 환경변수 변경 시 `pm2 delete` → `pm2 start` 방식 사용 (restart --update-env 캐시 문제)
+- **법적 동의**: 로그인 후 서버에서 consent_required 반환 → 미동의 시 동의 화면 표시
+- **감사 로그**: access_logs 테이블에 자동 기록, cleanup_service.py에서 3개월 초과 삭제
+- **RBAC**: admin 전용 API에 `room_role_required('admin')` 데코레이터 적용

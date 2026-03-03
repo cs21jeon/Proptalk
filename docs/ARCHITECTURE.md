@@ -1,6 +1,6 @@
 # Proptalk - 음성 채팅방 STT 플랫폼
 
-> 최종 업데이트: 2026-03-02
+> 최종 업데이트: 2026-03-03 (법적 컴플라이언스 추가)
 
 ## 전체 아키텍처
 
@@ -65,16 +65,26 @@ audio_files: id, message_id, room_id, user_id,
              phone_number, record_date, parsed_name, parsed_memo,
              transcript_text, transcript_summary, transcript_segments,
              status, drive_status, error_message, created_at, completed_at
+
+-- 사용자 동의 이력 (법적 컴플라이언스)
+user_consents: id, user_id, consent_type(terms/privacy/overseas_transfer/audio_processing),
+               version, agreed, agreed_at, withdrawn_at, ip_address, user_agent
+
+-- 접속기록 감사 로그 (안전성확보조치 §8)
+access_logs: id, user_id, action(login/upload/download/create_room/join_room/remove_member),
+             resource_type, resource_id, ip_address, user_agent, details(JSONB), created_at
 ```
 
 ## 핵심 플로우
 
-### 1. 로그인 + Drive 연동
+### 1. 로그인 + 동의 + Drive 연동
 1) Flutter에서 Google Sign-In (email + profile + drive.file 스코프)
 2) `serverAuthCode` + `idToken` 서버로 전송
 3) 서버에서 idToken 검증 → JWT 발급
 4) serverAuthCode → Google token endpoint에서 access_token + refresh_token 교환
 5) tokens를 users.google_tokens에 저장
+6) 서버가 `consent_required: true/false` 반환 → 미동의 시 동의 화면 표시
+7) 약관/개인정보/국외이전 3항목 필수 동의 → `POST /api/auth/consent`
 
 ### 2. 방 생성 + Drive 폴더
 1) 방장이 채팅방 생성
@@ -110,6 +120,9 @@ audio_files: id, message_id, room_id, user_id,
 | 실시간 | 3초 폴링 + WebSocket (병행) |
 | 파일저장 | Google Drive API (방장 OAuth 토큰) |
 | 포맷변환 | ffprobe + ffmpeg (3GP/AMR → MP3) |
+| 법적 동의 | 서버 DB 기반 동의 관리 (버전 추적) |
+| 감사 로그 | access_logs (3개월 보관, cron 자동 삭제) |
+| RBAC | room_members.role (admin/member) 데코레이터 |
 
 ## 파일 구조
 
@@ -118,31 +131,35 @@ Proptalk/
 ├── server/                      # 백엔드 (원격 서버 배포)
 │   ├── app.py                   # 메인 Flask 앱
 │   ├── config.py                # 설정 (환경변수 기반)
-│   ├── models.py                # DB 모델 (psycopg2, 토큰/Drive CRUD)
-│   ├── auth.py                  # OAuth + JWT + serverAuthCode 교환
-│   ├── routes_rooms.py          # 채팅방 API + Drive 폴더 생성
-│   ├── routes_messages.py       # 음성 업로드 + STT + Drive 저장
+│   ├── models.py                # DB 모델 (User, Room, Message, UserConsent, AccessLog)
+│   ├── auth.py                  # OAuth + JWT + 동의 API + RBAC + 계정 삭제
+│   ├── routes_rooms.py          # 채팅방 API + Drive 폴더 + 멤버 추방
+│   ├── routes_messages.py       # 음성 업로드 + STT + Drive 저장 + 감사 로그
 │   ├── whisper_service.py       # OpenAI Whisper API + 포맷 변환
 │   ├── claude_service.py        # Claude 마크다운 요약
 │   ├── drive_service.py         # Drive 업로드/다운로드 (토큰 자동 갱신)
 │   ├── filename_parser.py       # 파일명 파싱
-│   ├── cleanup_service.py       # 24시간 파일 삭제
+│   ├── cleanup_service.py       # 24시간 파일 삭제 + 감사 로그 3개월 삭제
 │   ├── ecosystem.config.js      # PM2 환경변수
 │   └── deploy/                  # 배포용 파일
 │
 ├── flutter/                     # Flutter 앱
 │   ├── lib/
-│   │   ├── main.dart
+│   │   ├── main.dart                     # 동의 화면 라우팅 로직
+│   │   ├── constants/
+│   │   │   └── terms.dart                # 법적 문서 텍스트 (약관/처리방침/동의문)
 │   │   ├── screens/
-│   │   │   ├── login_screen.dart
-│   │   │   ├── rooms_screen.dart
-│   │   │   ├── chat_screen.dart          # 폴링 + 마크다운 렌더링
+│   │   │   ├── login_screen.dart         # 법적 문서 링크
+│   │   │   ├── consent_screen.dart       # 서비스 동의 화면 (3항목)
+│   │   │   ├── rooms_screen.dart         # 설정 메뉴 추가
+│   │   │   ├── settings_screen.dart      # 법적 문서/동의 관리/계정 삭제
+│   │   │   ├── chat_screen.dart          # 폴링 + 마크다운 + 음성 동의
 │   │   │   └── audio_picker_screen.dart  # 파일 권한 처리
 │   │   └── services/
-│   │       ├── auth_service.dart          # drive.file 스코프 + serverAuthCode
-│   │       ├── api_service.dart           # API + Drive 메서드
+│   │       ├── auth_service.dart          # drive.file + 동의 상태 관리
+│   │       ├── api_service.dart           # API + Drive + 동의/탈퇴
 │   │       └── socket_service.dart
-│   └── pubspec.yaml
+│   └── pubspec.yaml                      # url_launcher, shared_preferences
 │
 ├── docs/
 │   ├── ARCHITECTURE.md          # 이 파일

@@ -6,9 +6,11 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../constants/terms.dart';
 import 'audio_picker_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -45,9 +47,15 @@ class _ChatScreenState extends State<ChatScreen> {
   Timer? _pollingTimer;
   int? _lastMessageId;
 
+  // dispose에서 안전하게 사용하기 위해 참조 저장
+  late final AuthService _auth;
+  late String _roomName;
+
   @override
   void initState() {
     super.initState();
+    _auth = context.read<AuthService>();
+    _roomName = widget.roomName;
     _loadMessages();
     _setupWebSocket();
     _startPolling();
@@ -63,8 +71,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.dispose();
     _recorder.dispose();
 
-    final auth = context.read<AuthService>();
-    auth.socket.leaveRoom(widget.roomId);
+    _auth.socket.leaveRoom(widget.roomId);
     super.dispose();
   }
 
@@ -299,7 +306,55 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// 첫 음성 업로드 시 동의 확인
+  Future<bool> _checkAudioConsent() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('audio_consent_agreed') == true) return true;
+
+    final agreed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('음성 데이터 처리 동의'),
+        content: SingleChildScrollView(
+          child: Text(
+            AppTerms.audioUploadConsent,
+            style: const TextStyle(height: 1.6),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('동의'),
+          ),
+        ],
+      ),
+    );
+
+    if (agreed == true) {
+      await prefs.setBool('audio_consent_agreed', true);
+      // 서버에도 동의 기록
+      try {
+        final api = context.read<ApiService>();
+        await api.recordConsent([
+          {'type': 'audio_processing', 'version': '2026-03-01'},
+        ]);
+      } catch (_) {
+        // 서버 기록 실패해도 앱 사용은 가능
+      }
+      return true;
+    }
+    return false;
+  }
+
   Future<void> _uploadAudio(File file) async {
+    // 첫 업로드 시 동의 확인
+    if (!await _checkAudioConsent()) return;
+
     setState(() => _isUploadingAudio = true);
 
     // Optimistic Update: 업로드 시작 즉시 메시지 표시
@@ -457,75 +512,353 @@ class _ChatScreenState extends State<ChatScreen> {
       final data = await api.getRoom(widget.roomId);
       final room = data['room'];
       final members = data['members'] as List? ?? [];
+      final pendingMembers = data['pending_members'] as List? ?? [];
       final inviteCode = room['invite_code'] ?? '';
+      final myId = _auth.currentUser?['id'];
+      final isAdmin = members.any((m) => m['id'] == myId && m['role'] == 'admin');
 
       if (!mounted) return;
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
-        builder: (ctx) => DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.3,
-          maxChildSize: 0.8,
-          expand: false,
-          builder: (_, scrollCtrl) => Padding(
-            padding: const EdgeInsets.all(20),
-            child: ListView(
-              controller: scrollCtrl,
-              children: [
-                Text(room['name'] ?? '',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                if (room['description']?.isNotEmpty ?? false) ...[
-                  const SizedBox(height: 8),
-                  Text(room['description']),
-                ],
-                const SizedBox(height: 16),
-                // 초대코드
-                Card(
-                  child: ListTile(
-                    title: const Text('초대 코드'),
-                    subtitle: Text(inviteCode,
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold,
-                            letterSpacing: 2)),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.copy),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: inviteCode));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('초대코드 복사됨!')),
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final currentPending = List<dynamic>.from(pendingMembers);
+            final nameController = TextEditingController(text: _roomName);
+            bool isEditingName = false;
+
+            return SafeArea(
+              child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.9,
+              child: Scaffold(
+                appBar: AppBar(
+                  leading: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                  title: const Text('채팅방 설정'),
+                  automaticallyImplyLeading: false,
+                ),
+                body: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // 채팅방 이름 (admin이면 수정 가능)
+                    StatefulBuilder(
+                      builder: (context, setNameState) {
+                        if (isEditingName && isAdmin) {
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: nameController,
+                                  autofocus: true,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                  onSubmitted: (value) async {
+                                    final newName = value.trim();
+                                    if (newName.isEmpty || newName == _roomName) {
+                                      setNameState(() => isEditingName = false);
+                                      return;
+                                    }
+                                    try {
+                                      await api.renameRoom(widget.roomId, newName);
+                                      if (mounted) {
+                                        setState(() => _roomName = newName);
+                                        setNameState(() => isEditingName = false);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('이름이 "$newName"(으)로 변경되었습니다.')),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('이름 변경 실패: $e')),
+                                        );
+                                      }
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.check),
+                                onPressed: () async {
+                                  final newName = nameController.text.trim();
+                                  if (newName.isEmpty || newName == _roomName) {
+                                    setNameState(() => isEditingName = false);
+                                    return;
+                                  }
+                                  try {
+                                    await api.renameRoom(widget.roomId, newName);
+                                    if (mounted) {
+                                      setState(() => _roomName = newName);
+                                      setNameState(() => isEditingName = false);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('이름이 "$newName"(으)로 변경되었습니다.')),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('이름 변경 실패: $e')),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => setNameState(() => isEditingName = false),
+                              ),
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: Text(_roomName,
+                                style: Theme.of(context).textTheme.headlineSmall),
+                            ),
+                            if (isAdmin)
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 20),
+                                tooltip: '이름 변경',
+                                onPressed: () {
+                                  nameController.text = _roomName;
+                                  setNameState(() => isEditingName = true);
+                                },
+                              ),
+                          ],
                         );
                       },
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text('멤버 (${members.length}명)',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                ...members.map((m) => ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: m['avatar_url'] != null
-                            ? NetworkImage(m['avatar_url'])
-                            : null,
-                        child: m['avatar_url'] == null
-                            ? Text(m['name']?[0] ?? '?')
-                            : null,
+                    if (room['description']?.isNotEmpty ?? false) ...[
+                      const SizedBox(height: 8),
+                      Text(room['description']),
+                    ],
+                    const SizedBox(height: 16),
+
+                    // 초대코드
+                    Card(
+                      child: ListTile(
+                        title: const Text('초대 코드'),
+                        subtitle: Text(inviteCode,
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold,
+                                letterSpacing: 2)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.copy),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: inviteCode));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('초대코드 복사됨!')),
+                            );
+                          },
+                        ),
                       ),
-                      title: Text(m['name'] ?? ''),
-                      subtitle: Text(m['email'] ?? ''),
-                      trailing: m['role'] == 'admin'
-                          ? const Chip(label: Text('관리자'))
-                          : null,
-                    )),
-              ],
+                    ),
+
+                    // 승인 대기 섹션 (admin에게만 표시)
+                    if (currentPending.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Icon(Icons.hourglass_top, size: 20, color: Colors.orange.shade700),
+                          const SizedBox(width: 4),
+                          Text('승인 대기 (${currentPending.length}명)',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Colors.orange.shade700,
+                              )),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ...currentPending.map((m) => Card(
+                            color: Colors.orange.withOpacity(0.05),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundImage: m['avatar_url'] != null
+                                    ? NetworkImage(m['avatar_url'])
+                                    : null,
+                                child: m['avatar_url'] == null
+                                    ? Text(m['name']?[0] ?? '?')
+                                    : null,
+                              ),
+                              title: Text(m['name'] ?? ''),
+                              subtitle: Text(m['email'] ?? ''),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.check_circle, color: Colors.green),
+                                    tooltip: '승인',
+                                    onPressed: () async {
+                                      try {
+                                        await api.approveMember(widget.roomId, m['id']);
+                                        setSheetState(() => currentPending.remove(m));
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('${m['name']}님을 승인했습니다.')),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('승인 실패: $e')),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.cancel, color: Colors.red),
+                                    tooltip: '거절',
+                                    onPressed: () async {
+                                      try {
+                                        await api.rejectMember(widget.roomId, m['id']);
+                                        setSheetState(() => currentPending.remove(m));
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('${m['name']}님을 거절했습니다.')),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('거절 실패: $e')),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )),
+                    ],
+
+                    const SizedBox(height: 16),
+                    Text('멤버 (${members.length}명)',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    ...members.map((m) => ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: m['avatar_url'] != null
+                                ? NetworkImage(m['avatar_url'])
+                                : null,
+                            child: m['avatar_url'] == null
+                                ? Text(m['name']?[0] ?? '?')
+                                : null,
+                          ),
+                          title: Text(m['name'] ?? ''),
+                          subtitle: Text(m['email'] ?? ''),
+                          trailing: m['role'] == 'admin'
+                              ? const Chip(label: Text('관리자'))
+                              : null,
+                        )),
+
+                    // 관리 섹션
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    ListTile(
+                      leading: Icon(Icons.exit_to_app, color: Colors.orange.shade700),
+                      title: Text('채팅방 나가기',
+                        style: TextStyle(color: Colors.orange.shade700)),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showLeaveConfirmation();
+                      },
+                    ),
+                    if (isAdmin)
+                      ListTile(
+                        leading: const Icon(Icons.delete_forever, color: Colors.red),
+                        title: const Text('채팅방 삭제',
+                          style: TextStyle(color: Colors.red)),
+                        subtitle: const Text('모든 메시지가 영구 삭제됩니다'),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showDeleteConfirmation();
+                        },
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
+            );
+          },
         ),
       );
     } catch (e) {
       _showError('정보 로딩 실패: $e');
     }
+  }
+
+  void _showLeaveConfirmation() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('채팅방 나가기'),
+        content: const Text('정말 이 채팅방을 나가시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final api = context.read<ApiService>();
+                await api.leaveRoom(widget.roomId);
+                if (mounted) Navigator.pop(context);
+              } catch (e) {
+                _showError('나가기 실패: $e');
+              }
+            },
+            child: const Text('나가기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('채팅방 삭제'),
+        content: const Text(
+          '채팅방을 삭제하면 모든 메시지와 파일이 영구 삭제됩니다.\n이 작업은 되돌릴 수 없습니다.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final api = context.read<ApiService>();
+                await api.deleteRoom(widget.roomId);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('채팅방이 삭제되었습니다.')),
+                  );
+                  Navigator.pop(context);
+                }
+              } catch (e) {
+                _showError('삭제 실패: $e');
+              }
+            },
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ============================================================
@@ -832,7 +1165,7 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Column(
           children: [
-            Text(widget.roomName, style: const TextStyle(fontSize: 16)),
+            Text(_roomName, style: const TextStyle(fontSize: 16)),
             if (_typingUser != null)
               Text('$_typingUser 입력 중...',
                   style: TextStyle(
@@ -846,8 +1179,8 @@ class _ChatScreenState extends State<ChatScreen> {
             onPressed: () => _showAudioSearch(),
           ),
           IconButton(
-            icon: const Icon(Icons.info_outline),
-            tooltip: '채팅방 정보',
+            icon: const Icon(Icons.settings),
+            tooltip: '채팅방 설정',
             onPressed: _showRoomInfo,
           ),
         ],

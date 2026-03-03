@@ -186,6 +186,117 @@ class ApiService {
   }
   
   // ============================================================
+  // 멤버 승인/거절
+  // ============================================================
+
+  /// 채팅방 삭제
+  Future<Map<String, dynamic>> deleteRoom(int roomId) async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/api/rooms/$roomId'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 채팅방 이름 변경
+  Future<Map<String, dynamic>> renameRoom(int roomId, String newName) async {
+    final response = await _client.patch(
+      Uri.parse('$baseUrl/api/rooms/$roomId'),
+      headers: _headers,
+      body: jsonEncode({'name': newName}),
+    );
+    return _handleResponse(response);
+  }
+
+  /// 채팅방 나가기
+  Future<Map<String, dynamic>> leaveRoom(int roomId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/rooms/$roomId/leave'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 관리자 권한 이전
+  Future<Map<String, dynamic>> transferAdmin(int roomId, int newAdminId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/rooms/$roomId/transfer-admin'),
+      headers: _headers,
+      body: jsonEncode({'user_id': newAdminId}),
+    );
+    return _handleResponse(response);
+  }
+
+  /// 즐겨찾기 토글
+  Future<Map<String, dynamic>> toggleFavorite(int roomId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/rooms/$roomId/favorite'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 멤버 승인
+  Future<Map<String, dynamic>> approveMember(int roomId, int userId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/rooms/$roomId/members/$userId/approve'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 멤버 거절
+  Future<Map<String, dynamic>> rejectMember(int roomId, int userId) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/rooms/$roomId/members/$userId/reject'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  // ============================================================
+  // 동의 관리
+  // ============================================================
+
+  /// 동의 기록 저장
+  Future<Map<String, dynamic>> recordConsent(List<Map<String, String>> consents) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/auth/consent'),
+      headers: _headers,
+      body: jsonEncode({'consents': consents}),
+    );
+    return _handleResponse(response);
+  }
+
+  /// 동의 상태 조회
+  Future<Map<String, dynamic>> getConsentStatus() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/api/auth/consent/status'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 동의 철회
+  Future<Map<String, dynamic>> withdrawConsent(String consentType) async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/auth/consent/withdraw'),
+      headers: _headers,
+      body: jsonEncode({'type': consentType}),
+    );
+    return _handleResponse(response);
+  }
+
+  /// 회원 탈퇴
+  Future<Map<String, dynamic>> deleteAccount() async {
+    final response = await _client.delete(
+      Uri.parse('$baseUrl/api/auth/account'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  // ============================================================
   // Drive 연동
   // ============================================================
 

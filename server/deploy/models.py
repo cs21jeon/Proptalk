@@ -106,6 +106,14 @@ class User:
             (user_id,)
         )
 
+    @staticmethod
+    def delete_account(user_id):
+        """회원 탈퇴 - CASCADE로 연관 데이터 모두 삭제"""
+        return execute(
+            "DELETE FROM users WHERE id = %s RETURNING id",
+            (user_id,)
+        )
+
 
 # ============================================================
 # Room 모델
@@ -130,33 +138,35 @@ class Room:
     @staticmethod
     def list_for_user(user_id):
         return query_all(
-            """SELECT r.*, rm.role,
-                      (SELECT COUNT(*) FROM room_members WHERE room_id = r.id) as member_count,
+            """SELECT r.*, rm.role, rm.status as my_status,
+                      COALESCE(rm.is_favorite, false) as is_favorite,
+                      (SELECT COUNT(*) FROM room_members WHERE room_id = r.id AND status = 'active') as member_count,
+                      (SELECT COUNT(*) FROM room_members WHERE room_id = r.id AND status = 'pending') as pending_count,
                       (SELECT content FROM messages WHERE room_id = r.id ORDER BY created_at DESC LIMIT 1) as last_message
                FROM rooms r
                JOIN room_members rm ON r.id = rm.room_id
                WHERE rm.user_id = %s
-               ORDER BY r.updated_at DESC""",
+               ORDER BY COALESCE(rm.is_favorite, false) DESC, r.updated_at DESC""",
             (user_id,)
         )
 
     @staticmethod
-    def add_member(room_id, user_id, role='member'):
+    def add_member(room_id, user_id, role='member', status='active'):
         return execute(
-            """INSERT INTO room_members (room_id, user_id, role)
-               VALUES (%s, %s, %s)
+            """INSERT INTO room_members (room_id, user_id, role, status)
+               VALUES (%s, %s, %s, %s)
                ON CONFLICT (room_id, user_id) DO NOTHING
                RETURNING *""",
-            (room_id, user_id, role)
+            (room_id, user_id, role, status)
         )
 
     @staticmethod
     def get_members(room_id):
         return query_all(
-            """SELECT u.id, u.name, u.email, u.avatar_url, rm.role, rm.joined_at
+            """SELECT u.id, u.name, u.email, u.avatar_url, rm.role, rm.status, rm.joined_at
                FROM room_members rm
                JOIN users u ON rm.user_id = u.id
-               WHERE rm.room_id = %s
+               WHERE rm.room_id = %s AND rm.status = 'active'
                ORDER BY rm.joined_at""",
             (room_id,)
         )
@@ -164,10 +174,50 @@ class Room:
     @staticmethod
     def is_member(room_id, user_id):
         result = query_one(
-            "SELECT 1 FROM room_members WHERE room_id = %s AND user_id = %s",
+            "SELECT 1 FROM room_members WHERE room_id = %s AND user_id = %s AND status = 'active'",
             (room_id, user_id)
         )
         return result is not None
+
+    @staticmethod
+    def get_member_status(room_id, user_id):
+        """멤버의 role + status 조회 (pending 포함)"""
+        return query_one(
+            "SELECT role, status FROM room_members WHERE room_id = %s AND user_id = %s",
+            (room_id, user_id)
+        )
+
+    @staticmethod
+    def get_pending_members(room_id):
+        """승인 대기 중 멤버 목록"""
+        return query_all(
+            """SELECT u.id, u.name, u.email, u.avatar_url, rm.joined_at
+               FROM room_members rm
+               JOIN users u ON rm.user_id = u.id
+               WHERE rm.room_id = %s AND rm.status = 'pending'
+               ORDER BY rm.joined_at""",
+            (room_id,)
+        )
+
+    @staticmethod
+    def approve_member(room_id, user_id):
+        """멤버 승인: pending → active, joined_at 갱신"""
+        return execute(
+            """UPDATE room_members SET status = 'active', joined_at = NOW()
+               WHERE room_id = %s AND user_id = %s AND status = 'pending'
+               RETURNING *""",
+            (room_id, user_id)
+        )
+
+    @staticmethod
+    def reject_member(room_id, user_id):
+        """멤버 거절: row 삭제 (재신청 가능)"""
+        return execute(
+            """DELETE FROM room_members
+               WHERE room_id = %s AND user_id = %s AND status = 'pending'
+               RETURNING *""",
+            (room_id, user_id)
+        )
 
     @staticmethod
     def update_drive_folder(room_id, drive_folder_id):
@@ -175,6 +225,56 @@ class Room:
         return execute(
             "UPDATE rooms SET drive_folder_id = %s WHERE id = %s RETURNING *",
             (drive_folder_id, room_id)
+        )
+
+    @staticmethod
+    def delete(room_id):
+        """방 삭제 (CASCADE로 messages, room_members 모두 삭제)"""
+        return execute(
+            "DELETE FROM rooms WHERE id = %s RETURNING id",
+            (room_id,)
+        )
+
+    @staticmethod
+    def rename(room_id, new_name):
+        """방 이름 변경"""
+        return execute(
+            "UPDATE rooms SET name = %s, updated_at = NOW() WHERE id = %s RETURNING *",
+            (new_name, room_id)
+        )
+
+    @staticmethod
+    def remove_member(room_id, user_id):
+        """멤버 스스로 나가기"""
+        return execute(
+            "DELETE FROM room_members WHERE room_id = %s AND user_id = %s RETURNING *",
+            (room_id, user_id)
+        )
+
+    @staticmethod
+    def get_admin_count(room_id):
+        """방의 admin 수 조회"""
+        result = query_one(
+            "SELECT COUNT(*) as cnt FROM room_members WHERE room_id = %s AND role = 'admin' AND status = 'active'",
+            (room_id,)
+        )
+        return result['cnt'] if result else 0
+
+    @staticmethod
+    def transfer_admin(room_id, new_admin_user_id):
+        """관리자 권한 이전"""
+        return execute(
+            "UPDATE room_members SET role = 'admin' WHERE room_id = %s AND user_id = %s AND status = 'active' RETURNING *",
+            (room_id, new_admin_user_id)
+        )
+
+    @staticmethod
+    def toggle_favorite(room_id, user_id):
+        """즐겨찾기 토글"""
+        return execute(
+            """UPDATE room_members SET is_favorite = NOT COALESCE(is_favorite, false)
+               WHERE room_id = %s AND user_id = %s RETURNING is_favorite""",
+            (room_id, user_id)
         )
 
 
@@ -358,4 +458,95 @@ class AudioFile:
                 ORDER BY af.created_at DESC
                 LIMIT 100""",
             tuple(params)
+        )
+
+
+# ============================================================
+# UserConsent 모델
+# ============================================================
+CURRENT_CONSENT_VERSION = '2026-03-01'
+
+class UserConsent:
+    @staticmethod
+    def create(user_id, consent_type, version, ip_address=None, user_agent=None):
+        return execute(
+            """INSERT INTO user_consents (user_id, consent_type, version, agreed, agreed_at, ip_address, user_agent)
+               VALUES (%s, %s, %s, true, NOW(), %s, %s) RETURNING *""",
+            (user_id, consent_type, version, ip_address, user_agent)
+        )
+
+    @staticmethod
+    def get_latest(user_id, consent_type):
+        return query_one(
+            """SELECT * FROM user_consents
+               WHERE user_id = %s AND consent_type = %s AND agreed = true AND withdrawn_at IS NULL
+               ORDER BY agreed_at DESC LIMIT 1""",
+            (user_id, consent_type)
+        )
+
+    @staticmethod
+    def has_valid_consent(user_id, consent_type, version=None):
+        if version is None:
+            version = CURRENT_CONSENT_VERSION
+        result = query_one(
+            """SELECT 1 FROM user_consents
+               WHERE user_id = %s AND consent_type = %s AND version = %s
+                     AND agreed = true AND withdrawn_at IS NULL
+               LIMIT 1""",
+            (user_id, consent_type, version)
+        )
+        return result is not None
+
+    @staticmethod
+    def get_all_for_user(user_id):
+        return query_all(
+            """SELECT DISTINCT ON (consent_type)
+                      consent_type, version, agreed, agreed_at, withdrawn_at
+               FROM user_consents
+               WHERE user_id = %s
+               ORDER BY consent_type, agreed_at DESC""",
+            (user_id,)
+        )
+
+    @staticmethod
+    def withdraw(user_id, consent_type):
+        return execute(
+            """UPDATE user_consents SET withdrawn_at = NOW()
+               WHERE user_id = %s AND consent_type = %s AND withdrawn_at IS NULL
+               RETURNING *""",
+            (user_id, consent_type)
+        )
+
+    @staticmethod
+    def check_required(user_id):
+        """필수 동의 항목 중 미동의 항목 반환"""
+        required_types = ['terms', 'privacy', 'overseas_transfer']
+        missing = []
+        for ct in required_types:
+            if not UserConsent.has_valid_consent(user_id, ct):
+                missing.append(ct)
+        return missing
+
+
+# ============================================================
+# AccessLog 모델
+# ============================================================
+class AccessLog:
+    @staticmethod
+    def log(user_id, action, resource_type=None, resource_id=None,
+            ip_address=None, user_agent=None, details=None):
+        return execute(
+            """INSERT INTO access_logs (user_id, action, resource_type, resource_id,
+                                        ip_address, user_agent, details)
+               VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (user_id, action, resource_type, resource_id,
+             ip_address, user_agent, json.dumps(details) if details else None)
+        )
+
+    @staticmethod
+    def cleanup_old(days=90):
+        """지정 일수 이상 된 로그 삭제"""
+        return execute(
+            "DELETE FROM access_logs WHERE created_at < NOW() - INTERVAL '%s days'",
+            (days,)
         )

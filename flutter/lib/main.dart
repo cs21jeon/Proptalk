@@ -4,6 +4,7 @@ import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/rooms_screen.dart';
+import 'screens/consent_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,7 +73,13 @@ class _VoiceRoomAppState extends State<VoiceRoomApp> {
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          return auth.isLoggedIn ? const RoomsScreen() : const LoginScreen();
+          if (!auth.isLoggedIn) {
+            return const LoginScreen();
+          }
+          if (auth.consentRequired) {
+            return const ConsentScreen();
+          }
+          return const RoomsScreen();
         },
       ),
     );

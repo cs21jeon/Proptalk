@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS room_members (
     room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     role VARCHAR(20) DEFAULT 'member',  -- admin / member
+    status VARCHAR(20) DEFAULT 'active',  -- active / pending
+    is_favorite BOOLEAN DEFAULT false,
     joined_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (room_id, user_id)
 );
@@ -87,7 +89,40 @@ CREATE INDEX IF NOT EXISTS idx_audio_phone ON audio_files(phone_number);
 CREATE INDEX IF NOT EXISTS idx_audio_date ON audio_files(record_date);
 CREATE INDEX IF NOT EXISTS idx_audio_status ON audio_files(status);
 CREATE INDEX IF NOT EXISTS idx_room_members_user ON room_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_room_members_status ON room_members(room_id, status);
 CREATE INDEX IF NOT EXISTS idx_rooms_invite ON rooms(invite_code);
+
+-- 사용자 동의 이력
+CREATE TABLE IF NOT EXISTS user_consents (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    consent_type VARCHAR(50) NOT NULL,
+    version VARCHAR(20) NOT NULL,
+    agreed BOOLEAN NOT NULL DEFAULT true,
+    agreed_at TIMESTAMP DEFAULT NOW(),
+    withdrawn_at TIMESTAMP,
+    ip_address VARCHAR(50),
+    user_agent TEXT
+);
+
+-- 접속기록 (감사 로그)
+CREATE TABLE IF NOT EXISTS access_logs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER,
+    action VARCHAR(50) NOT NULL,
+    resource_type VARCHAR(30),
+    resource_id INTEGER,
+    ip_address VARCHAR(50),
+    user_agent TEXT,
+    details JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_consents_user ON user_consents(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_consents_type ON user_consents(user_id, consent_type);
+CREATE INDEX IF NOT EXISTS idx_access_logs_user ON access_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_access_logs_created ON access_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_access_logs_action ON access_logs(action);
 
 -- 업데이트 트리거
 CREATE OR REPLACE FUNCTION update_room_timestamp()
