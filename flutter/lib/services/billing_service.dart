@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 
 /// 과금 상태 관리
@@ -66,31 +65,8 @@ class BillingService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 웹 결제 페이지 열기
-  Future<void> openBillingPage(BuildContext context) async {
-    final token = api.token;
-    if (token == null) return;
-
-    final url = '${ApiService.baseUrl.replaceAll('/voiceroom', '')}/proptalk/billing/?token=$token';
-    try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (e) {
-      debugPrint('[BillingService] 결제 페이지 열기 실패: $e');
-    }
-  }
-
-  /// 구독 관리 페이지 열기
-  Future<void> openManagePage(BuildContext context) async {
-    final token = api.token;
-    if (token == null) return;
-
-    final url = '${ApiService.baseUrl.replaceAll('/voiceroom', '')}/proptalk/billing/manage?token=$token';
-    try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (e) {
-      debugPrint('[BillingService] 관리 페이지 열기 실패: $e');
-    }
-  }
+  /// 결제 웹 URL (사용자가 직접 브라우저에서 접속)
+  static const String billingWebUrl = 'https://goldenrabbit.biz/proptalk/billing/';
 
   /// 구독 해지
   Future<bool> cancelSubscription() async {

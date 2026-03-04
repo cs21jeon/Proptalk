@@ -69,8 +69,10 @@ class _VoiceRoomAppState extends State<VoiceRoomApp> {
           if (auth.consentRequired) {
             return const ConsentScreen();
           }
-          // 로그인 완료 후 과금 상태 로드
-          context.read<BillingService>().loadBillingStatus();
+          // 로그인 완료 후 과금 상태 로드 (빌드 완료 후 실행)
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            context.read<BillingService>().loadBillingStatus();
+          });
           return const RoomsScreen();
         },
       ),

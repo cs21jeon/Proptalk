@@ -377,28 +377,41 @@ class _ChatScreenState extends State<ChatScreen> {
     // 잔여 시간 확인
     final billing = context.read<BillingService>();
     if (!billing.canTranscribe) {
-      final goToBilling = await showDialog<bool>(
+      await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('이용 시간 소진'),
-          content: const Text(
-            '음성 변환 이용 시간이 소진되었습니다.\n충전하시겠습니까?',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('음성 변환 이용 시간이 소진되었습니다.\n아래 주소에서 충전할 수 있습니다.'),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  BillingService.billingWebUrl,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(ctx).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('충전하기'),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('확인'),
             ),
           ],
         ),
       );
-      if (goToBilling == true && mounted) {
-        billing.openBillingPage(context);
-      }
       return;
     }
 

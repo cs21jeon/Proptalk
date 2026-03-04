@@ -34,7 +34,7 @@ class Config:
     # Google OAuth
     # ============================================================
     GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
-    # 서버 사이드 검증에만 사용 (client_id로 id_token 검증)
+    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
     
     # ============================================================
     # Google Drive API
@@ -55,6 +55,7 @@ class Config:
     # ============================================================
     # Whisper STT
     # ============================================================
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
     WHISPER_MODEL = os.environ.get('WHISPER_MODEL', 'small')
     
     # ============================================================

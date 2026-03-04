@@ -103,27 +103,46 @@ class _BillingScreenState extends State<BillingScreen> {
                   ),
                 ),
 
-                // 액션 버튼들
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => billing.openBillingPage(context),
-                        icon: const Icon(Icons.add),
-                        label: const Text('충전/구독'),
-                      ),
-                    ),
-                    if (!billing.isFree) ...[
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => billing.openManagePage(context),
-                          icon: const Icon(Icons.settings),
-                          label: const Text('구독 관리'),
+                // 웹 결제 안내
+                Card(
+                  margin: const EdgeInsets.only(bottom: 0),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('충전/구독',
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '모바일 또는 PC 브라우저에서 아래 주소로 접속하여 충전할 수 있습니다.',
+                          style: TextStyle(fontSize: 13),
                         ),
-                      ),
-                    ],
-                  ],
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: SelectableText(
+                            BillingService.billingWebUrl,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '로그인 후 요금제를 선택하고 결제하면 자동으로 이용 시간이 충전됩니다.',
+                          style: TextStyle(fontSize: 12, color: theme.colorScheme.outline),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
 
