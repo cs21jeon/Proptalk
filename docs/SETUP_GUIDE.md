@@ -16,6 +16,15 @@ psql -U goldenrabbit -d voiceroom -f init_db.sql
 
 # 법적 컴플라이언스 마이그레이션 (user_consents, access_logs)
 psql -U goldenrabbit -d voiceroom -f server/deploy/migrate_consents.sql
+
+# 결제 시스템 마이그레이션 (billing_plans, user_billing, payment_transactions, usage_logs)
+sudo -u postgres psql -d voiceroom -f server/init_billing.sql
+
+# 결제 테이블 권한 부여
+sudo -u postgres psql -d voiceroom -c "
+GRANT ALL PRIVILEGES ON TABLE billing_plans, user_billing, payment_transactions, usage_logs TO goldenrabbit_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO goldenrabbit_user;
+"
 ```
 
 ## 2단계: Google Cloud 설정
@@ -111,6 +120,13 @@ nano ecosystem.config.js
 # - OPENAI_API_KEY
 # - CLAUDE_API_KEY
 # - ENABLE_DRIVE_BACKUP ('true' / 'false')
+#
+# 결제 시스템 (토스페이먼츠):
+# - TOSS_CLIENT_KEY (토스 클라이언트 키)
+# - TOSS_SECRET_KEY (토스 시크릿 키)
+# - TOSS_WEBHOOK_SECRET (토스 웹훅 시크릿)
+# - BILLING_ENCRYPTION_KEY (AES-256 billingKey 암호화 키, 32바이트)
+#   생성: python3 -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
 ```
 
 ## 5단계: PM2 실행
@@ -124,9 +140,8 @@ pm2 logs voiceroom  # 로그 확인
 
 ## 6단계: Nginx 설정
 
-```bash
-sudo nano /etc/nginx/sites-available/goldenrabbit.biz
-```
+> **중요**: 실제 Nginx 설정 파일은 `/home/webapp/goldenrabbit/config/nginx/goldenrabbit.conf`
+> (`/etc/nginx/sites-enabled/goldenrabbit`에서 symlink됨)
 
 아래 내용 추가:
 
@@ -160,6 +175,17 @@ location /socket.io/ {
     
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
+}
+```
+
+```nginx
+# Proptalk 결제 웹페이지
+location /proptalk/billing/ {
+    proxy_pass http://127.0.0.1:5060/proptalk/billing/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 ```
 
@@ -218,3 +244,7 @@ flutter run
 - **법적 동의**: 로그인 후 서버에서 consent_required 반환 → 미동의 시 동의 화면 표시
 - **감사 로그**: access_logs 테이블에 자동 기록, cleanup_service.py에서 3개월 초과 삭제
 - **RBAC**: admin 전용 API에 `room_role_required('admin')` 데코레이터 적용
+- **결제**: 토스페이먼츠 웹결제 사용, billingKey는 AES-256-CBC 암호화 저장
+- **결제 크론**: 구독 자동결제(03:00), 만료 처리(04:00), 주문 정리(매시간) - cleanup_service.py
+- **결제 로그**: payment_transactions 테이블에 5년 보관 (전자상거래법)
+- **Nginx**: /proptalk/billing/ 경로 → Flask 5060 포트 프록시 필수

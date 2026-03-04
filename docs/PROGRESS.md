@@ -1,6 +1,6 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-03 (디자인 시스템 구축 + UI 모던화 Phase 1-6)
+> 최종 업데이트: 2026-03-04 (결제 시스템 구현 - 토스페이먼츠 웹결제)
 
 ## 프로젝트 개요
 
@@ -36,6 +36,9 @@
 26. **앱 아이콘 변경** ✅ **신규**
 27. **디자인 시스템 구축** (Pretendard 폰트 + 시맨틱 컬러 + 간격/반경 상수 + 통합 테마) ✅ **신규**
 28. **UI 모던화 Phase 1-6** (하드코딩 색상 교체, 로그인 애니메이션, 톡방 FAB 통합, 채팅 날짜구분선/메시지그룹핑, 다크모드) ✅ **신규**
+29. **결제 시스템** (토스페이먼츠 웹결제, 시간팩+월구독, 자동결제/만료 크론) ✅ **신규**
+30. **결제 웹페이지** (요금제 선택/결제/성공/실패/구독관리 5개 페이지) ✅ **신규**
+31. **결제 약관** (결제/환불 전용 약관, 이용약관/개인정보처리방침 결제 조항 추가) ✅ **신규**
 
 ---
 
@@ -96,6 +99,22 @@
 | **오디오 피커 개선** | ✅ | 확장자 표시 타일, ListView.separated |
 | **다크모드 채팅 버블 수정** | ✅ | primaryContainer + onPrimaryContainer 대비 개선 |
 | **SafeArea 하단 잘림 수정** | ✅ | 설정/톡방목록/오디오피커 하단 패딩 추가 |
+| **결제 DB 스키마** | ✅ | billing_plans, user_billing, payment_transactions, usage_logs 4개 테이블 |
+| **과금 모델/서비스** | ✅ | models_billing.py, billing_service.py (잔액확인/차감/충전/구독/암호화) |
+| **토스페이먼츠 연동** | ✅ | toss_service.py (결제승인/빌링키/자동결제/환불/웹훅검증) |
+| **결제 API 엔드포인트** | ✅ | routes_billing.py (9개 엔드포인트: status/plans/order/confirm/webhook/cancel/refund/history/usage) |
+| **결제 웹페이지** | ✅ | billing_web.py + templates/billing/ (요금제/결제/성공/실패/구독관리) |
+| **Nginx 결제 프록시** | ✅ | /proptalk/billing/ → Flask 5060 포트 프록시 |
+| **자동결제 크론** | ✅ | 구독갱신(03:00), 만료처리(04:00), 주문정리(매시간) |
+| **결제 약관 (웹)** | ✅ | marketing/proptalk/billing-terms.html |
+| **이용약관 결제조항 추가** | ✅ | terms-of-service.html 요금표+토스페이먼츠 반영 |
+| **개인정보처리방침 토스 추가** | ✅ | privacy-policy.html 제3자 제공 토스페이먼츠 추가 |
+| **Flutter 결제 서비스** | ✅ | billing_service.dart (ChangeNotifier) + billing_screen.dart |
+| **Flutter 잔액 확인** | ✅ | chat_screen.dart 업로드 전 잔액 체크 + 충전 안내 다이얼로그 |
+| **Flutter 설정 결제 섹션** | ✅ | settings_screen.dart 구독/결제 섹션 추가 |
+| **서버 배포** | ✅ | DB 마이그레이션 + 코드 배포 + PM2 재시작 완료 |
+| **API 테스트** | ✅ | 5개 API 엔드포인트 정상 응답 확인 |
+| **웹 페이지 테스트** | ✅ | 4개 결제 웹페이지 정상 렌더링 확인 |
 
 ### 테스트 진행 중 🔄
 
@@ -104,6 +123,9 @@
 | Google Drive 전체 플로우 | 🔄 | 로그인 → Drive 동의 → 방 생성 → 업로드 → Drive 저장 |
 | OAuth 동의화면 프로덕션 전환 | 🔄 | 현재 테스트 모드 (100명 제한) |
 | 법적 컴플라이언스 전체 플로우 | 🔄 | 로그인 → 동의 화면 → 음성 동의 → 설정/철회 |
+| 토스페이먼츠 테스트 키 연동 | 🔄 | 사업자 등록 → 토스 가입 → 테스트 키 발급 → 실결제 테스트 |
+| Flutter 결제 UI 테스트 | 🔄 | 앱 빌드 → 설정화면 결제 섹션 → 잔액 부족 다이얼로그 |
+| 결제 전체 플로우 테스트 | 🔄 | 요금제 선택 → 토스 결제 → 시간 충전 → 업로드 차감 |
 
 ---
 
@@ -157,7 +179,14 @@ pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
 - `routes_messages.py` - STT/업로드/Drive 저장 + **감사 로그**
 - `whisper_service.py` - OpenAI Whisper API (3GP/AMR 자동 변환)
 - `claude_service.py` - Claude 마크다운 요약
-- `cleanup_service.py` - 24시간 파일 삭제 + **3개월 초과 감사 로그 삭제**
+- `cleanup_service.py` - 24시간 파일 삭제 + **3개월 초과 감사 로그 삭제** + **구독 자동결제/만료 크론**
+- `models_billing.py` - **결제 모델 (BillingPlan, UserBilling, PaymentTransaction, UsageLog)**
+- `billing_service.py` - **핵심 과금 로직 (잔액확인/차감/충전/구독/AES-256 암호화)**
+- `toss_service.py` - **토스페이먼츠 API 래퍼 (결제승인/빌링키/자동결제/환불/웹훅)**
+- `routes_billing.py` - **결제 API 엔드포인트 9개**
+- `billing_web.py` - **결제 웹페이지 라우트 (Jinja2 템플릿)**
+- `templates/billing/` - **결제 웹 UI (base/plans/checkout/success/fail/manage.html)**
+- `init_billing.sql` - **결제 DB 스키마 (4 테이블 + 5 플랜 데이터)**
 
 ---
 
@@ -177,6 +206,50 @@ pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
 | 파일 제한 | 25MB (자동 10분 분할) |
 | 서비스 파일 | `whisper_service.py` |
 | 포맷 변환 | 3GP/AMR → MP3 자동 변환 (ffprobe + ffmpeg) |
+
+---
+
+## 결제 시스템: 토스페이먼츠 웹결제 ✅
+
+### 결제 방식
+- **웹결제** (Google Play 인앱결제 X) → 수수료 4.3% (넷플릭스/스포티파이 모델)
+- 앱 → url_launcher로 웹 결제 페이지 → 토스페이먼츠 SDK → 결제 → 앱 확인
+- billingKey 기반 자동결제 (월구독)
+
+### 요금제
+| 플랜 | 타입 | 포함 시간 | 가격 (VAT 포함) | 비고 |
+|------|------|-----------|-----------------|------|
+| 무료 체험 | 무료 | 10분 | 0원 | 계정당 평생 |
+| 1시간 팩 | 일회성 | 60분 | 9,900원 | 만료 없음 |
+| 10시간 팩 | 일회성 | 600분 | 79,000원 | 만료 없음, 시간당 132원 |
+| Basic 30시간 | 월구독 | 1,800분 | 29,000원/월 | 초과 시 12원/분 |
+| Pro 90시간 | 월구독 | 5,400분 | 79,000원/월 | 초과 시 12원/분 |
+
+### 결제 웹페이지 URL
+| URL | 설명 |
+|-----|------|
+| `goldenrabbit.biz/proptalk/billing/` | 요금제 선택 |
+| `goldenrabbit.biz/proptalk/billing/checkout` | 토스 SDK 결제창 |
+| `goldenrabbit.biz/proptalk/billing/success` | 결제 성공 |
+| `goldenrabbit.biz/proptalk/billing/fail` | 결제 실패 |
+| `goldenrabbit.biz/proptalk/billing/manage` | 구독 관리 |
+
+### 보안
+| 항목 | 조치 |
+|------|------|
+| billingKey | AES-256-CBC 암호화 저장 (BILLING_ENCRYPTION_KEY 환경변수) |
+| Toss Secret Key | 환경변수만, 코드 하드코딩 금지 |
+| 웹훅 검증 | HMAC-SHA256 시그니처 검증 |
+| 결제 금액 | 서버에서 order_id 기준 금액 일치 확인 |
+| 결제 로그 | 5년 보관 (전자상거래법) |
+
+### 환경변수 (ecosystem.config.js에 추가)
+```
+TOSS_CLIENT_KEY      # 토스페이먼츠 클라이언트 키
+TOSS_SECRET_KEY      # 토스페이먼츠 시크릿 키
+TOSS_WEBHOOK_SECRET  # 토스 웹훅 시크릿
+BILLING_ENCRYPTION_KEY  # AES-256 billingKey 암호화 키 (32바이트)
+```
 
 ---
 
@@ -236,6 +309,13 @@ CREATE TABLE access_logs (
     details JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- 결제 시스템 (2026-03-04)
+-- billing_plans: 요금제 정의 (5개 플랜)
+-- user_billing: 사용자별 잔여 시간/구독 상태/billingKey (AES-256 암호화)
+-- payment_transactions: 결제 이력 5년 보관 (order_id, payment_key, raw_response JSONB)
+-- usage_logs: 사용량 차감 기록 (seconds_used, seconds_before, seconds_after)
+-- 상세 스키마: server/init_billing.sql 참조
 ```
 
 ---
@@ -291,6 +371,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `2026-03-03` - 톡방 관리 기능 + 헤더 리디자인 + 동의화면 버그 수정
 - `2026-03-03` - UI 개선 (정렬, 설정시트, 인라인 이름변경, 앱아이콘, Drive 재동의 수정)
 - `2026-03-03` - 디자인 시스템 구축 + UI 모던화 Phase 1-6 (테마/폰트/다크모드/애니메이션/SafeArea)
+- `2026-03-04` - 결제 시스템 구현 (토스페이먼츠 웹결제, DB+API+웹+Flutter+크론+법적문서)
 
 ---
 
@@ -316,12 +397,32 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - [x] 설정 화면 (법적 문서, 동의 관리, 계정 삭제)
 - [x] 서버 배포 (DB 마이그레이션 + 코드 배포 완료)
 
-### 우선순위 3: 앱 출시 준비
+### 우선순위 3: 결제 시스템 (토스페이먼츠) ✅ 구현 완료 (2026-03-04)
+- [x] DB 스키마 (billing_plans, user_billing, payment_transactions, usage_logs)
+- [x] 과금 모델/서비스 (잔액 확인, 시간 차감, 충전, 구독 활성화/해지)
+- [x] 토스페이먼츠 API 연동 (결제승인, 빌링키, 자동결제, 환불, 웹훅)
+- [x] 결제 API 엔드포인트 9개 (status/plans/order/confirm/webhook/cancel/refund/history/usage)
+- [x] 결제 웹페이지 5개 (요금제 선택/결제/성공/실패/구독관리)
+- [x] 음성 업로드 시 잔액 확인 + 사용 후 차감 로직 (routes_messages.py)
+- [x] 자동결제 크론 (구독갱신 03:00, 만료처리 04:00, 주문정리 매시간)
+- [x] billingKey AES-256-CBC 암호화 저장
+- [x] Flutter 결제 서비스 (BillingService ChangeNotifier)
+- [x] Flutter 결제 화면 (billing_screen.dart)
+- [x] Flutter 업로드 전 잔액 확인 다이얼로그
+- [x] Flutter 설정 화면 결제 섹션
+- [x] 결제 약관 페이지 (billing-terms.html)
+- [x] 이용약관/개인정보처리방침 결제 조항 업데이트
+- [x] 서버 배포 (DB 마이그레이션 + 코드 배포 + Nginx 프록시 + PM2 재시작)
+- [x] API 테스트 (5개 엔드포인트 정상 확인)
+- [x] 웹 페이지 테스트 (4개 페이지 정상 렌더링 확인)
+- [ ] 토스페이먼츠 테스트 키 발급 → 실결제 테스트
+- [ ] Flutter 앱 빌드 → 결제 UI 테스트
+
+### 우선순위 4: 앱 출시 준비
 - [ ] 에러 핸들링 강화
 - [ ] Google Play Console 등록
-- [ ] 무료 이용량 관리 로직
 
-### 우선순위 4: 개선
+### 우선순위 5: 개선
 - [x] FAB 라벨 추가 ("참여", "새 톡방")
 - [x] 톡방 참여 승인 프로세스 (pending → 방장 승인/거절)
 - [x] 승인 대기 UI (방 목록 뱃지 + 방 정보 승인/거절)
@@ -359,7 +460,14 @@ Proptalk/
 │   ├── claude_service.py       # Claude 마크다운 요약
 │   ├── drive_service.py        # Google Drive 업로드/다운로드 (사용자 OAuth)
 │   ├── filename_parser.py
-│   ├── cleanup_service.py      # 24시간 삭제
+│   ├── cleanup_service.py      # 24시간 삭제 + 구독 자동결제/만료 크론
+│   ├── models_billing.py       # 결제 모델 (BillingPlan, UserBilling, PaymentTransaction, UsageLog)
+│   ├── billing_service.py      # 과금 로직 (잔액확인/차감/충전/구독/AES-256 암호화)
+│   ├── toss_service.py         # 토스페이먼츠 API (결제승인/빌링키/자동결제/환불)
+│   ├── routes_billing.py       # 결제 API 엔드포인트 9개
+│   ├── billing_web.py          # 결제 웹페이지 라우트
+│   ├── templates/billing/      # 결제 웹 UI (6개 HTML)
+│   ├── init_billing.sql        # 결제 DB 스키마
 │   ├── ecosystem.config.js     # PM2 환경변수
 │   └── deploy/                 # 배포용 파일
 │
@@ -382,7 +490,8 @@ Proptalk/
 │   │   │   └── audio_picker_screen.dart # 파일 타일 개선
 │   │   └── services/
 │   │       ├── auth_service.dart         # drive.file + 동의 상태 관리
-│   │       ├── api_service.dart          # Drive + 동의/탈퇴 API
+│   │       ├── api_service.dart          # Drive + 동의/탈퇴 + 결제 API
+│   │       ├── billing_service.dart      # 결제 서비스 (ChangeNotifier)
 │   │       └── socket_service.dart
 │   └── pubspec.yaml                      # url_launcher 추가
 │
@@ -475,6 +584,15 @@ Proptalk/
 | POST | /api/rooms/:id/audio | 음성 업로드 → STT → Drive 저장 |
 | GET | /api/audio/:id/download | 음성 다운로드 (로컬 → Drive 프록시) |
 | GET | /api/rooms/:id/messages | 메시지 목록 (폴링용) |
+| **GET** | **/api/billing/status** | **잔여 시간, 플랜, 구독 상태** |
+| **GET** | **/api/billing/plans** | **활성 요금제 목록 (공개)** |
+| **POST** | **/api/billing/order** | **주문 생성 → order_id 반환** |
+| **POST** | **/api/billing/confirm** | **토스 결제 승인 확인** |
+| **POST** | **/api/billing/webhook** | **토스 웹훅 수신** |
+| **POST** | **/api/billing/subscription/cancel** | **구독 해지** |
+| **POST** | **/api/billing/refund** | **환불 요청 (7일 이내)** |
+| **GET** | **/api/billing/history** | **결제 이력** |
+| **GET** | **/api/billing/usage** | **사용량 이력** |
 
 ---
 

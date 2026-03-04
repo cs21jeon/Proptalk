@@ -102,7 +102,14 @@ def register_message_routes(app, socketio):
         """
         if not Room.is_member(room_id, g.user_id):
             return jsonify({'error': '접근 권한이 없습니다'}), 403
-        
+
+        # 과금: 잔액 확인
+        from billing_service import check_can_transcribe, ensure_user_billing
+        ensure_user_billing(g.user_id)
+        can_use, reason = check_can_transcribe(g.user_id)
+        if not can_use:
+            return jsonify({'error': reason, 'code': 'INSUFFICIENT_BALANCE'}), 402
+
         if 'file' not in request.files:
             return jsonify({'error': '파일이 없습니다'}), 400
         
@@ -327,7 +334,23 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
                     'text': seg['text'].strip(),
                 })
 
-            logger.info(f"[STT] 변환 완료: {elapsed:.1f}초, {len(transcript_text)}자")
+            # 음성 길이(초) 추출 + duration_seconds DB 기록
+            from billing_service import extract_audio_duration, deduct_usage
+            duration_seconds = extract_audio_duration(result.get('segments', []))
+            if duration_seconds > 0:
+                from models import execute as db_execute
+                db_execute(
+                    "UPDATE audio_files SET duration_seconds = %s WHERE id = %s",
+                    (duration_seconds, audio_id)
+                )
+
+            logger.info(f"[STT] 변환 완료: {elapsed:.1f}초, {len(transcript_text)}자, 음성길이={duration_seconds:.1f}초")
+
+            # 과금: 사용량 차감
+            if duration_seconds > 0:
+                deduct_result = deduct_usage(user_id, audio_id, duration_seconds)
+                if deduct_result:
+                    logger.info(f"[Billing] 차감 완료: 잔여 {deduct_result['seconds_after']:.0f}초")
 
             # --- 3단계: Claude API 요약 ---
             summary_text = None

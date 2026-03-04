@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
+import 'services/billing_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/rooms_screen.dart';
 import 'screens/consent_screen.dart';
@@ -13,12 +14,14 @@ void main() {
 
   final apiService = ApiService();
   final authService = AuthService(apiService);
+  final billingService = BillingService(apiService);
 
   runApp(
     MultiProvider(
       providers: [
         Provider<ApiService>.value(value: apiService),
         ChangeNotifierProvider<AuthService>.value(value: authService),
+        ChangeNotifierProvider<BillingService>.value(value: billingService),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
       ],
       child: const VoiceRoomApp(),
@@ -66,6 +69,8 @@ class _VoiceRoomAppState extends State<VoiceRoomApp> {
           if (auth.consentRequired) {
             return const ConsentScreen();
           }
+          // 로그인 완료 후 과금 상태 로드
+          context.read<BillingService>().loadBillingStatus();
           return const RoomsScreen();
         },
       ),

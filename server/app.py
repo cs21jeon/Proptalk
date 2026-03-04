@@ -53,11 +53,15 @@ os.makedirs(Config.AUDIO_FOLDER, exist_ok=True)
 from auth import register_auth_routes
 from routes_rooms import register_room_routes
 from routes_messages import register_message_routes
+from routes_billing import register_billing_routes
+from billing_web import register_billing_web_routes
 from websocket import register_websocket
 
 register_auth_routes(app)
 register_room_routes(app)
 register_message_routes(app, socketio)
+register_billing_routes(app)
+register_billing_web_routes(app)
 register_websocket(socketio)
 
 # ============================================================

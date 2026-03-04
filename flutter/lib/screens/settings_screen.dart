@@ -4,9 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
+import '../services/billing_service.dart';
 import '../constants/terms.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
+import 'billing_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -204,6 +206,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
+
+                // 구독/결제 섹션
+                _buildSectionHeader(theme, '구독/결제'),
+                Consumer<BillingService>(
+                  builder: (context, billing, _) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.workspace_premium_outlined),
+                            title: Text(billing.planName),
+                            subtitle: Text('잔여 시간: ${billing.remainingTimeFormatted}'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const BillingScreen()),
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 56),
+                          ListTile(
+                            leading: const Icon(Icons.payment_outlined),
+                            title: const Text('충전/요금제'),
+                            trailing: const Icon(Icons.open_in_new, size: 18),
+                            onTap: () => billing.openBillingPage(context),
+                          ),
+                          if (!billing.isFree) ...[
+                            const Divider(height: 1, indent: 56),
+                            ListTile(
+                              leading: const Icon(Icons.manage_accounts_outlined),
+                              title: const Text('구독 관리'),
+                              trailing: const Icon(Icons.open_in_new, size: 18),
+                              onTap: () => billing.openManagePage(context),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
 
                 // 앱 설정 섹션
                 _buildSectionHeader(theme, '앱 설정'),

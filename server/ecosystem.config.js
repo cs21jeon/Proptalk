@@ -34,6 +34,12 @@ module.exports = {
       AUDIO_FOLDER: '/home/webapp/goldenrabbit/chat_stt/audio',
       AUDIO_RETENTION_HOURS: '24',  // 파일 보관 시간
 
+      // 토스페이먼츠 결제
+      TOSS_CLIENT_KEY: '',                     // 토스 클라이언트 키
+      TOSS_SECRET_KEY: '',                     // 토스 시크릿 키
+      TOSS_WEBHOOK_SECRET: '',                 // 토스 웹훅 시크릿
+      BILLING_ENCRYPTION_KEY: '',              // AES-256 키 (64자 hex)
+
       // 서버
       PORT: '5060',
       FLASK_DEBUG: 'false',

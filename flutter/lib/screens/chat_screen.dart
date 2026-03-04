@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/billing_service.dart';
 import '../constants/terms.dart';
 import '../theme/app_colors.dart';
 import 'audio_picker_screen.dart';
@@ -373,6 +374,34 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _uploadAudio(File file) async {
+    // 잔여 시간 확인
+    final billing = context.read<BillingService>();
+    if (!billing.canTranscribe) {
+      final goToBilling = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('이용 시간 소진'),
+          content: const Text(
+            '음성 변환 이용 시간이 소진되었습니다.\n충전하시겠습니까?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('충전하기'),
+            ),
+          ],
+        ),
+      );
+      if (goToBilling == true && mounted) {
+        billing.openBillingPage(context);
+      }
+      return;
+    }
+
     // 첫 업로드 시 동의 확인
     if (!await _checkAudioConsent()) return;
 

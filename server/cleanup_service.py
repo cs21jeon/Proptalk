@@ -1,9 +1,10 @@
 """
-음성 파일 자동 정리 서비스
+음성 파일 자동 정리 서비스 + 구독 자동결제/만료 관리
 설정된 시간(기본 24시간) 후 파일 자동 삭제
 """
 import os
 import time
+import uuid
 import logging
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -85,6 +86,138 @@ def cleanup_temp_uploads():
             logger.error(f"[Cleanup] 임시 파일 삭제 실패: {filename} - {e}")
 
 
+# ============================================================
+# 구독 자동결제 / 만료 관리
+# ============================================================
+
+def process_subscription_renewals():
+    """
+    만료 임박 구독 자동결제 (매일 03:00 실행)
+    만료 1일 이내 + auto_renew=true인 구독 갱신
+    """
+    from models import query_all
+    from models_billing import UserBilling, BillingPlan, PaymentTransaction
+    from billing_service import decrypt_billing_key
+    from toss_service import charge_billing_key
+
+    try:
+        # 만료 1일 이내 + 자동갱신 활성 구독 조회
+        renewals = query_all(
+            """SELECT ub.*, bp.code as plan_code, bp.name as plan_name,
+                      bp.price as plan_price, bp.minutes_included
+               FROM user_billing ub
+               JOIN billing_plans bp ON ub.current_plan_id = bp.id
+               WHERE ub.subscription_status = 'active'
+                 AND ub.auto_renew = true
+                 AND ub.subscription_expires_at <= NOW() + INTERVAL '1 day'
+                 AND ub.billing_key_encrypted IS NOT NULL"""
+        )
+
+        if not renewals:
+            return
+
+        logger.info(f"[Billing Cron] 갱신 대상: {len(renewals)}건")
+
+        for sub in renewals:
+            user_id = sub['user_id']
+            try:
+                # billingKey 복호화
+                billing_key = decrypt_billing_key(
+                    sub['billing_key_encrypted'], sub['billing_key_iv']
+                )
+
+                # 주문 생성
+                order_id = f"renew_{user_id}_{uuid.uuid4().hex[:8]}"
+                plan_id = sub['current_plan_id']
+                amount = sub['plan_price']
+
+                PaymentTransaction.create(
+                    user_id=user_id,
+                    plan_id=plan_id,
+                    order_id=order_id,
+                    amount=amount,
+                    billing_type='subscription_renewal',
+                )
+
+                # 자동결제
+                result = charge_billing_key(
+                    billing_key=billing_key,
+                    customer_key=sub['customer_key'],
+                    order_id=order_id,
+                    amount=amount,
+                    order_name=f"Proptalk {sub['plan_name']} 갱신",
+                )
+
+                if result['success']:
+                    # 결제 성공 → 구독 갱신
+                    toss_data = result['data']
+                    PaymentTransaction.approve(
+                        order_id=order_id,
+                        payment_key=toss_data.get('paymentKey'),
+                        method=toss_data.get('method'),
+                        minutes_granted=sub['minutes_included'],
+                        raw_response=toss_data,
+                    )
+                    UserBilling.renew_subscription(user_id, plan_id)
+                    logger.info(f"[Billing Cron] 갱신 성공: user={user_id}")
+                else:
+                    # 결제 실패 → past_due
+                    PaymentTransaction.fail(
+                        order_id=order_id,
+                        error_message=result.get('error'),
+                        raw_response=result.get('data'),
+                    )
+                    UserBilling.set_status(user_id, 'past_due')
+                    logger.warning(
+                        f"[Billing Cron] 갱신 실패: user={user_id}, "
+                        f"error={result.get('error')}"
+                    )
+
+            except Exception as e:
+                logger.error(f"[Billing Cron] 갱신 오류: user={user_id}, error={e}")
+
+    except Exception as e:
+        logger.error(f"[Billing Cron] process_subscription_renewals 오류: {e}")
+
+
+def expire_past_due_subscriptions():
+    """
+    결제 실패 3일 경과 구독 만료 처리 (매일 04:00 실행)
+    """
+    from models import query_all
+    from models_billing import UserBilling
+
+    try:
+        expired = query_all(
+            """SELECT user_id FROM user_billing
+               WHERE subscription_status = 'past_due'
+                 AND subscription_expires_at < NOW() - INTERVAL '3 days'"""
+        )
+
+        if not expired:
+            return
+
+        logger.info(f"[Billing Cron] 만료 처리 대상: {len(expired)}건")
+
+        for row in expired:
+            user_id = row['user_id']
+            UserBilling.set_status(user_id, 'expired')
+            logger.info(f"[Billing Cron] 구독 만료: user={user_id}")
+
+    except Exception as e:
+        logger.error(f"[Billing Cron] expire_past_due 오류: {e}")
+
+
+def cleanup_stale_orders():
+    """24시간 지난 pending 주문 만료 처리 (매시간 실행)"""
+    from models_billing import PaymentTransaction
+
+    try:
+        PaymentTransaction.expire_stale_orders()
+    except Exception as e:
+        logger.error(f"[Billing Cron] cleanup_stale_orders 오류: {e}")
+
+
 # 스케줄러 인스턴스
 _scheduler = None
 
@@ -118,6 +251,33 @@ def init_cleanup_scheduler():
         minutes=30,
         id='cleanup_temp',
         name='임시 파일 정리'
+    )
+
+    # 매일 03:00 구독 자동결제
+    _scheduler.add_job(
+        process_subscription_renewals,
+        'cron',
+        hour=3, minute=0,
+        id='billing_renewals',
+        name='구독 자동결제'
+    )
+
+    # 매일 04:00 결제 실패 구독 만료
+    _scheduler.add_job(
+        expire_past_due_subscriptions,
+        'cron',
+        hour=4, minute=0,
+        id='billing_expire',
+        name='구독 만료 처리'
+    )
+
+    # 매시간 stale 주문 정리
+    _scheduler.add_job(
+        cleanup_stale_orders,
+        'interval',
+        hours=1,
+        id='billing_stale_orders',
+        name='만료 주문 정리'
     )
 
     _scheduler.start()

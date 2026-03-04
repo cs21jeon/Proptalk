@@ -319,6 +319,55 @@ class ApiService {
   }
 
   // ============================================================
+  // 과금/결제
+  // ============================================================
+
+  /// 과금 상태 조회
+  Future<Map<String, dynamic>> getBillingStatus() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/api/billing/status'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 요금제 목록
+  Future<Map<String, dynamic>> getBillingPlans() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/api/billing/plans'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 결제 이력
+  Future<Map<String, dynamic>> getBillingHistory() async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/api/billing/history'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 사용량 이력
+  Future<Map<String, dynamic>> getUsageHistory({int limit = 20}) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/api/billing/usage?limit=$limit'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// 구독 해지
+  Future<Map<String, dynamic>> cancelSubscription() async {
+    final response = await _client.post(
+      Uri.parse('$baseUrl/api/billing/subscription/cancel'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  // ============================================================
   // 응답 처리
   // ============================================================
   Map<String, dynamic> _handleResponse(http.Response response) {

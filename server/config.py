@@ -78,6 +78,15 @@ class Config:
     ENABLE_GOOGLE_DRIVE_BACKUP = os.environ.get('ENABLE_DRIVE_BACKUP', 'false').lower() == 'true'
     
     # ============================================================
+    # 토스페이먼츠 결제
+    # ============================================================
+    TOSS_CLIENT_KEY = os.environ.get('TOSS_CLIENT_KEY', '')
+    TOSS_SECRET_KEY = os.environ.get('TOSS_SECRET_KEY', '')
+    TOSS_WEBHOOK_SECRET = os.environ.get('TOSS_WEBHOOK_SECRET', '')
+    # AES-256 암호화 키 (64자 hex = 32바이트), billingKey 암호화용
+    BILLING_ENCRYPTION_KEY = os.environ.get('BILLING_ENCRYPTION_KEY', '')
+
+    # ============================================================
     # 서버
     # ============================================================
     HOST = '0.0.0.0'
