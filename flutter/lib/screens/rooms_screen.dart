@@ -356,58 +356,24 @@ class _RoomsScreenState extends State<RoomsScreen> {
             ],
           ),
           if (user != null)
-            PopupMenuButton<String>(
-              icon: CircleAvatar(
-                radius: 16,
-                backgroundImage: user['avatar_url'] != null
-                  ? NetworkImage(user['avatar_url'])
-                  : null,
-                child: user['avatar_url'] == null
-                  ? Text(user['name']?[0] ?? '?') : null,
-              ),
-              onSelected: (value) {
-                if (value == 'logout') {
-                  auth.signOut();
-                } else if (value == 'settings') {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                }
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
               },
-              itemBuilder: (ctx) => <PopupMenuEntry<String>>[
-                PopupMenuItem<String>(
-                  value: 'name',
-                  enabled: false,
-                  child: Text(user['name'] ?? ''),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundImage: user['avatar_url'] != null
+                    ? NetworkImage(user['avatar_url'])
+                    : null,
+                  child: user['avatar_url'] == null
+                    ? Text(user['name']?[0] ?? '?') : null,
                 ),
-                PopupMenuItem<String>(
-                  value: 'email',
-                  enabled: false,
-                  child: Text(user['email'] ?? '', style: const TextStyle(fontSize: 12)),
-                ),
-                const PopupMenuDivider(),
-                const PopupMenuItem<String>(
-                  value: 'settings',
-                  child: Row(
-                    children: [
-                      Icon(Icons.settings, size: 20),
-                      SizedBox(width: 8),
-                      Text('설정'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem<String>(
-                  value: 'logout',
-                  child: Row(
-                    children: [
-                      Icon(Icons.logout, size: 20),
-                      SizedBox(width: 8),
-                      Text('로그아웃'),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
         ],
       ),

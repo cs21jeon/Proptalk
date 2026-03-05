@@ -20,9 +20,10 @@ def ensure_user_billing(user_id):
     return UserBilling.ensure(user_id)
 
 
-def check_can_transcribe(user_id):
+def check_can_transcribe(user_id, audio_duration_seconds=None):
     """
     STT 가능 여부 확인.
+    audio_duration_seconds가 주어지면 잔여 시간과 비교하여 부족 시 차단.
     Returns: (bool, reason_str)
     """
     billing = UserBilling.find_by_user_id(user_id)
@@ -36,6 +37,16 @@ def check_can_transcribe(user_id):
 
     if remaining <= 0:
         return False, '이용 시간이 소진되었습니다. 충전 후 이용해주세요.'
+
+    # 파일 길이와 잔여 시간 비교
+    if audio_duration_seconds and remaining < audio_duration_seconds:
+        mins_remaining = remaining / 60
+        mins_needed = audio_duration_seconds / 60
+        return False, (
+            f'잔여 시간({mins_remaining:.0f}분)이 '
+            f'파일 길이({mins_needed:.0f}분)보다 부족합니다. '
+            f'충전 후 이용해주세요.'
+        )
 
     return True, 'ok'
 
@@ -187,6 +198,26 @@ def decrypt_billing_key(encrypted_b64, iv_b64):
     plaintext = unpadder.update(padded) + unpadder.finalize()
 
     return plaintext.decode('utf-8')
+
+
+def get_audio_duration_fast(filepath):
+    """
+    ffprobe로 오디오 파일 길이(초) 빠르게 확인.
+    Whisper가 의존하는 ffmpeg에 ffprobe가 포함되어 있으므로 추가 설치 불필요.
+    실패 시 None 반환 (graceful degradation).
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+             '-of', 'csv=p=0', filepath],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+    except Exception as e:
+        logger.warning(f"[Billing] ffprobe 실패: {e}")
+    return None
 
 
 def extract_audio_duration(segments):

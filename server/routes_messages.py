@@ -103,8 +103,8 @@ def register_message_routes(app, socketio):
         if not Room.is_member(room_id, g.user_id):
             return jsonify({'error': '접근 권한이 없습니다'}), 403
 
-        # 과금: 잔액 확인
-        from billing_service import check_can_transcribe, ensure_user_billing
+        # 과금: 잔액 확인 (1차 — 잔액 0 이하 차단)
+        from billing_service import check_can_transcribe, ensure_user_billing, get_audio_duration_fast
         ensure_user_billing(g.user_id)
         can_use, reason = check_can_transcribe(g.user_id)
         if not can_use:
@@ -112,24 +112,32 @@ def register_message_routes(app, socketio):
 
         if 'file' not in request.files:
             return jsonify({'error': '파일이 없습니다'}), 400
-        
+
         file = request.files['file']
         if not file.filename or not allowed_file(file.filename):
             return jsonify({'error': '허용되지 않는 파일 형식입니다'}), 400
-        
+
         language = request.form.get('language', 'ko')
         original_filename = file.filename
-        
+
         # 1) 파일 저장
         file_id = str(uuid.uuid4())
         ext = original_filename.rsplit('.', 1)[1].lower()
         saved_filename = f"{file_id}.{ext}"
         filepath = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
-        
+
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
         file.save(filepath)
         file_size = os.path.getsize(filepath)
-        
+
+        # 과금: 파일 길이 vs 잔여 시간 비교 (2차 — 부족 시 차단)
+        audio_duration = get_audio_duration_fast(filepath)
+        if audio_duration:
+            can_use, reason = check_can_transcribe(g.user_id, audio_duration_seconds=audio_duration)
+            if not can_use:
+                os.remove(filepath)
+                return jsonify({'error': reason, 'code': 'INSUFFICIENT_BALANCE'}), 402
+
         # 2) 음성 메시지 생성 (채팅에 표시)
         msg = Message.create(
             room_id, g.user_id, 'audio',

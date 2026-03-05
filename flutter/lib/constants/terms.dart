@@ -1,14 +1,14 @@
 /// Proptalk 법적 문서 (앱 내장용)
-/// 웹 버전: https://goldenrabbit.biz/proptalk/privacy-policy.html
-/// 웹 버전: https://goldenrabbit.biz/proptalk/terms-of-service.html
+/// 웹 버전: https://goldenrabbit.biz/proptalk/privacy
+/// 웹 버전: https://goldenrabbit.biz/proptalk/terms
 
 class AppTerms {
   static const String privacyPolicyUrl =
-      'https://goldenrabbit.biz/proptalk/privacy-policy.html';
+      'https://goldenrabbit.biz/proptalk/privacy';
   static const String termsOfServiceUrl =
-      'https://goldenrabbit.biz/proptalk/terms-of-service.html';
+      'https://goldenrabbit.biz/proptalk/terms';
   static const String billingTermsUrl =
-      'https://goldenrabbit.biz/proptalk/billing-terms.html';
+      'https://goldenrabbit.biz/proptalk/payment-terms';
 
   // ── 개인정보 처리방침 (요약) ──
 
@@ -83,7 +83,7 @@ class AppTerms {
 
 시행일: 2026년 3월 1일
 
-금토끼부동산(이하 "회사")은 Proptalk 서비스(이하 "서비스")를 운영함에 있어 「개인정보 보호법」 및 관련 법령을 준수하며, 이용자의 개인정보를 보호하기 위해 다음과 같이 개인정보 처리방침을 수립합니다.
+프롭넷(이하 "회사")은 Proptalk 서비스(이하 "서비스")를 운영함에 있어 「개인정보 보호법」 및 관련 법령을 준수하며, 이용자의 개인정보를 보호하기 위해 다음과 같이 개인정보 처리방침을 수립합니다.
 
 제1조 (수집하는 개인정보 항목)
 
@@ -161,7 +161,7 @@ class AppTerms {
 
 제9조 (개인정보 보호 책임자)
 
- - 운영자: 금토끼부동산
+ - 운영자: 프롭넷
  - 이메일: cs21.jeon@gmail.com
 
 제10조 (개인정보 처리방침의 변경)
@@ -185,7 +185,7 @@ class AppTerms {
 
 제1조 (목적)
 
-이 약관은 금토끼부동산(이하 "회사")이 제공하는 Proptalk 서비스(이하 "서비스")의 이용과 관련하여 회사와 이용자 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
+이 약관은 프롭넷(이하 "회사")이 제공하는 Proptalk 서비스(이하 "서비스")의 이용과 관련하여 회사와 이용자 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
 
 제2조 (정의)
 

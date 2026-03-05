@@ -1,6 +1,6 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-05 (D방식 웹결제 전환 + 요금제 안내 UI)
+> 최종 업데이트: 2026-03-05 (파비콘 + 프로필 화면 UX 개선)
 
 ## 프로젝트 개요
 
@@ -23,7 +23,7 @@
 13. **접속기록 감사 로그** (3개월 보관) ✅ **신규**
 14. **RBAC 권한 강화** (admin/member 역할 적용) ✅ **신규**
 15. **회원 탈퇴 + 동의 철회** ✅ **신규**
-16. **설정 화면** (법적 문서, 동의 관리, 계정 삭제) ✅ **신규**
+16. **프로필 화면** (법적 문서, 동의 관리, 계정 삭제, 로그아웃) ✅ **신규**
 17. **톡방 참여 승인 프로세스** (방장 승인/거절) ✅ **신규**
 18. **FAB 라벨** ("참여", "새 톡방") ✅ **신규**
 19. **톡방 관리 기능** (삭제/이름변경/나가기/즐겨찾기) ✅ **신규**
@@ -42,6 +42,13 @@
 32. **D방식 웹결제 전환** (앱 내 외부결제 링크 제거, Google Play 정책 준수) ✅ **신규**
 33. **요금제 안내 하단시트** (설정 > 충전/요금제에서 5개 플랜 카드 + 웹 충전 안내) ✅ **신규**
 34. **BillingService 빌드 에러 수정** (빌드 중 notifyListeners 호출 → addPostFrameCallback) ✅ **신규**
+35. **업로드 전 잔여 시간 검증** (ffprobe로 파일 길이 사전 확인, 잔여 시간 부족 시 업로드 차단) ✅ **신규**
+36. **Proptalk 랜딩페이지** (Coming Soon, proppedia와 통일된 디자인, 8개 섹션) ✅ **신규**
+37. **회사명 변경** (금토끼부동산 → 프롭넷 PropNet, 법적문서/proppedia/Flutter 전체 반영) ✅ **신규**
+38. **법적 문서 라우트** (/proptalk/terms, /privacy, /payment-terms 3개 라우트 추가) ✅ **신규**
+39. **Nginx 설정 정리** (미사용 config 삭제, n8n 완전 제거, SSL 인증서 정리) ✅ **신규**
+40. **파비콘 통일** (랜딩페이지 + 법적문서 3개에 투명 풀사이즈 Proptalk 아이콘 적용) ✅ **신규**
+41. **프로필 화면 UX 개선** (아바타 팝업메뉴 제거 → 탭하면 바로 프로필 화면, 설정→프로필 타이틀 변경) ✅ **신규**
 
 ---
 
@@ -52,7 +59,7 @@
 | 항목 | 상태 | 비고 |
 |------|------|------|
 | 서버 배포 | ✅ | goldenrabbit.biz:5060 |
-| Nginx 프록시 | ✅ | /voiceroom/ 경로 |
+| Nginx 프록시 | ✅ | /voiceroom/ + ^~ /proptalk/ 경로 |
 | PostgreSQL DB | ✅ | voiceroom DB (google_tokens, drive_folder_id 추가) |
 | Google OAuth + Drive | ✅ | `speech-to-text-goldenrabbit` 프로젝트, drive.file 스코프 |
 | Flutter 앱 빌드 | ✅ | Release APK (50.7MB) |
@@ -107,17 +114,23 @@
 | **토스페이먼츠 연동** | ✅ | toss_service.py (결제승인/빌링키/자동결제/환불/웹훅검증) |
 | **결제 API 엔드포인트** | ✅ | routes_billing.py (9개 엔드포인트: status/plans/order/confirm/webhook/cancel/refund/history/usage) |
 | **결제 웹페이지** | ✅ | billing_web.py + templates/billing/ (요금제/결제/성공/실패/구독관리) |
-| **Nginx 결제 프록시** | ✅ | /proptalk/billing/ → Flask 5060 포트 프록시 |
+| **Nginx 프록시 통합** | ✅ | ^~ /proptalk/ → Flask 5060 포트 (랜딩+법적문서+결제 통합) |
 | **자동결제 크론** | ✅ | 구독갱신(03:00), 만료처리(04:00), 주문정리(매시간) |
 | **결제 약관 (웹)** | ✅ | marketing/proptalk/billing-terms.html |
 | **이용약관 결제조항 추가** | ✅ | terms-of-service.html 요금표+토스페이먼츠 반영 |
 | **개인정보처리방침 토스 추가** | ✅ | privacy-policy.html 제3자 제공 토스페이먼츠 추가 |
 | **Flutter 결제 서비스** | ✅ | billing_service.dart (ChangeNotifier) + billing_screen.dart |
 | **Flutter 잔액 확인** | ✅ | chat_screen.dart 업로드 전 잔액 체크 + 충전 안내 다이얼로그 |
+| **업로드 전 시간 검증** | ✅ | ffprobe 사전 길이 확인, 잔여 시간 < 파일 길이 시 업로드 차단 |
 | **Flutter 설정 결제 섹션** | ✅ | settings_screen.dart 구독/결제 섹션 추가 |
 | **서버 배포** | ✅ | DB 마이그레이션 + 코드 배포 + PM2 재시작 완료 |
 | **API 테스트** | ✅ | 5개 API 엔드포인트 정상 응답 확인 |
 | **웹 페이지 테스트** | ✅ | 4개 결제 웹페이지 정상 렌더링 확인 |
+| **Proptalk 랜딩페이지** | ✅ | Coming Soon 페이지, proppedia와 통일된 디자인 (8개 섹션, 8장 스크린샷 갤러리) |
+| **회사명 변경 (프롭넷)** | ✅ | 금토끼부동산 → 프롭넷 (PropNet), 법적문서 3개 + proppedia + Flutter terms.dart |
+| **법적 문서 라우트** | ✅ | /proptalk/terms, /privacy, /payment-terms Flask 라우트 + 모든 HTML 링크 통일 |
+| **Nginx ^~ /proptalk/ 통합** | ✅ | 별도 /proptalk/billing/ → 단일 ^~ /proptalk/ 블록으로 통합 |
+| **Nginx 미사용 설정 삭제** | ✅ | voiceroom/n8n/building-service config 삭제, goldenrabbit.us SSL 인증서 삭제 |
 
 ### 테스트 진행 중 🔄
 
@@ -172,6 +185,12 @@ pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
 # 환경변수 변경 시 delete → start 방식 권장
 ```
 
+### Nginx 설정
+- **설정 파일 (정본)**: `/home/webapp/goldenrabbit/config/nginx/goldenrabbit.conf`
+- **심볼릭 링크**: `/etc/nginx/sites-enabled/goldenrabbit` → config/nginx/goldenrabbit.conf
+- **주의**: `scripts/setup.sh`가 config/nginx/에서 심볼릭 링크를 생성하므로, sites-enabled 직접 수정 금지
+- **Proptalk 프록시**: `location ^~ /proptalk/` → Flask 5060 포트 (랜딩+법적문서+결제 통합)
+
 ### 주요 설정 파일
 - `ecosystem.config.js` - PM2 환경변수 (GOOGLE_CLIENT_ID, CLIENT_SECRET, API 키 등)
 - `config.py` - Flask 설정
@@ -184,10 +203,10 @@ pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
 - `claude_service.py` - Claude 마크다운 요약
 - `cleanup_service.py` - 24시간 파일 삭제 + **3개월 초과 감사 로그 삭제** + **구독 자동결제/만료 크론**
 - `models_billing.py` - **결제 모델 (BillingPlan, UserBilling, PaymentTransaction, UsageLog)**
-- `billing_service.py` - **핵심 과금 로직 (잔액확인/차감/충전/구독/AES-256 암호화)**
+- `billing_service.py` - **핵심 과금 로직 (잔액확인/차감/충전/구독/AES-256 암호화/ffprobe 사전검증)**
 - `toss_service.py` - **토스페이먼츠 API 래퍼 (결제승인/빌링키/자동결제/환불/웹훅)**
 - `routes_billing.py` - **결제 API 엔드포인트 9개**
-- `billing_web.py` - **결제 웹페이지 라우트 (Jinja2 템플릿)**
+- `billing_web.py` - **웹페이지 라우트 (랜딩페이지 + 법적문서 3개 + 결제 5개, Jinja2 템플릿)**
 - `templates/billing/` - **결제 웹 UI (base/plans/checkout/success/fail/manage.html)**
 - `init_billing.sql` - **결제 DB 스키마 (4 테이블 + 5 플랜 데이터)**
 
@@ -228,9 +247,13 @@ pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
 | Basic 30시간 | 월구독 | 1,800분 | 29,000원/월 | 초과 시 12원/분 |
 | Pro 90시간 | 월구독 | 5,400분 | 79,000원/월 | 초과 시 12원/분 |
 
-### 결제 웹페이지 URL
+### 웹페이지 URL
 | URL | 설명 |
 |-----|------|
+| `goldenrabbit.biz/proptalk/` | **랜딩페이지 (Coming Soon)** |
+| `goldenrabbit.biz/proptalk/terms` | **이용약관** |
+| `goldenrabbit.biz/proptalk/privacy` | **개인정보 처리방침** |
+| `goldenrabbit.biz/proptalk/payment-terms` | **결제/환불 약관** |
 | `goldenrabbit.biz/proptalk/billing/` | 요금제 선택 |
 | `goldenrabbit.biz/proptalk/billing/checkout` | 토스 SDK 결제창 |
 | `goldenrabbit.biz/proptalk/billing/success` | 결제 성공 |
@@ -375,6 +398,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `2026-03-03` - UI 개선 (정렬, 설정시트, 인라인 이름변경, 앱아이콘, Drive 재동의 수정)
 - `2026-03-03` - 디자인 시스템 구축 + UI 모던화 Phase 1-6 (테마/폰트/다크모드/애니메이션/SafeArea)
 - `2026-03-04` - 결제 시스템 구현 (토스페이먼츠 웹결제, DB+API+웹+Flutter+크론+법적문서)
+- `2026-03-05` - 랜딩페이지 생성 + 회사명 변경 (프롭넷) + 법적문서 라우트 + nginx 정리
 
 ---
 
@@ -421,11 +445,25 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - [ ] 토스페이먼츠 테스트 키 발급 → 실결제 테스트
 - [ ] Flutter 앱 빌드 → 결제 UI 테스트
 
-### 우선순위 4: 앱 출시 준비
+### 우선순위 4: 랜딩페이지 + 브랜딩 ✅ 완료 (2026-03-05)
+- [x] Proptalk 랜딩페이지 (Coming Soon) - proppedia와 통일된 디자인
+- [x] 8개 섹션: 헤더/히어로/기능/스크린샷/추가기능/타겟사용자/요금제/CTA+푸터
+- [x] 스크린샷 갤러리 (8장, scroll-snap)
+- [x] 회사명 변경: 금토끼부동산 → 프롭넷 (PropNet)
+- [x] 법적 문서 3개 회사명 업데이트 (이용약관/개인정보/결제약관)
+- [x] proppedia 페이지 회사명 업데이트 (서버 직접 수정)
+- [x] Flutter terms.dart URL + 회사명 업데이트
+- [x] 법적 문서 Flask 라우트 3개 추가 (/terms, /privacy, /payment-terms)
+- [x] Nginx ^~ /proptalk/ 통합 프록시 (billing 별도 → 전체 통합)
+- [x] 미사용 nginx config 삭제 (voiceroom/n8n/building-service)
+- [x] n8n 관련 아티팩트 완전 제거 (goldenrabbit.us SSL 인증서 삭제)
+- [x] 서버 배포 (SCP + PM2 재시작 + nginx reload)
+
+### 우선순위 5: 앱 출시 준비
 - [ ] 에러 핸들링 강화
 - [ ] Google Play Console 등록
 
-### 우선순위 5: 개선
+### 우선순위 6: 개선
 - [x] FAB 라벨 추가 ("참여", "새 톡방")
 - [x] 톡방 참여 승인 프로세스 (pending → 방장 승인/거절)
 - [x] 승인 대기 UI (방 목록 뱃지 + 방 정보 승인/거절)
@@ -468,11 +506,17 @@ Proptalk/
 │   ├── billing_service.py      # 과금 로직 (잔액확인/차감/충전/구독/AES-256 암호화)
 │   ├── toss_service.py         # 토스페이먼츠 API (결제승인/빌링키/자동결제/환불)
 │   ├── routes_billing.py       # 결제 API 엔드포인트 9개
-│   ├── billing_web.py          # 결제 웹페이지 라우트
+│   ├── billing_web.py          # 웹페이지 라우트 (랜딩+법적문서+결제)
 │   ├── templates/billing/      # 결제 웹 UI (6개 HTML)
 │   ├── init_billing.sql        # 결제 DB 스키마
 │   ├── ecosystem.config.js     # PM2 환경변수
 │   └── deploy/                 # 배포용 파일
+│
+├── marketing/proptalk/         # **신규** 웹 정적 페이지
+│   ├── index.html              # 랜딩페이지 (Coming Soon)
+│   ├── terms-of-service.html   # 이용약관
+│   ├── privacy-policy.html     # 개인정보 처리방침
+│   └── billing-terms.html      # 결제/환불 약관
 │
 ├── flutter/                    # Flutter 앱
 │   ├── lib/

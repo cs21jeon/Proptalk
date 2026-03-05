@@ -334,7 +334,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('설정')),
+      appBar: AppBar(title: const Text('프로필')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(

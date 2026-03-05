@@ -450,7 +450,48 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _messages.removeWhere((m) => m['id'] == tempId);
       });
-      _showError('업로드 실패: $e');
+      // 잔액 부족(402) 시 충전 안내 다이얼로그 표시
+      if (e is ApiException && e.statusCode == 402) {
+        if (mounted) {
+          await showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('잔여 시간 부족'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(e.message),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SelectableText(
+                      BillingService.billingWebUrl,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(ctx).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('확인'),
+                ),
+              ],
+            ),
+          );
+        }
+      } else {
+        _showError('업로드 실패: $e');
+      }
     }
     if (mounted) setState(() => _isUploadingAudio = false);
   }
