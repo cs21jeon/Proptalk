@@ -17,7 +17,7 @@
 7. 파일명 파싱 (전화번호/날짜/이름) ✅
 8. Google Drive 자동 저장 (방장 드라이브) ✅
 9. Drive 프록시 다운로드 ✅
-10. 3초 폴링 실시간 업데이트 ✅
+10. WebSocket 실시간 업데이트 (폴링 제거) ✅
 11. **서비스 이용 동의 화면** (약관/개인정보/국외이전) ✅ **신규**
 12. **음성 데이터 처리 동의 팝업** ✅ **신규**
 13. **접속기록 감사 로그** (3개월 보관) ✅ **신규**
@@ -49,6 +49,7 @@
 39. **Nginx 설정 정리** (미사용 config 삭제, n8n 완전 제거, SSL 인증서 정리) ✅ **신규**
 40. **파비콘 통일** (랜딩페이지 + 법적문서 3개에 투명 풀사이즈 Proptalk 아이콘 적용) ✅ **신규**
 41. **프로필 화면 UX 개선** (아바타 팝업메뉴 제거 → 탭하면 바로 프로필 화면, 설정→프로필 타이틀 변경) ✅ **신규**
+42. **서버 확장성 개선** (Drive 연동 복구 + Sheets 로깅 + 폴링 제거 + ThreadPool + DB풀 확대) ✅ **신규**
 
 ---
 
@@ -131,6 +132,20 @@
 | **법적 문서 라우트** | ✅ | /proptalk/terms, /privacy, /payment-terms Flask 라우트 + 모든 HTML 링크 통일 |
 | **Nginx ^~ /proptalk/ 통합** | ✅ | 별도 /proptalk/billing/ → 단일 ^~ /proptalk/ 블록으로 통합 |
 | **Nginx 미사용 설정 삭제** | ✅ | voiceroom/n8n/building-service config 삭제, goldenrabbit.us SSL 인증서 삭제 |
+
+### 서버 확장성 개선 (2026-03-07) ✅
+
+| Phase | 항목 | 상태 | 비고 |
+|-------|------|------|------|
+| 1-1 | drive_service.py 공유 권한 + scope 추가 | ✅ | anyone/reader 권한, spreadsheets scope |
+| 1-2 | routes_messages.py Drive 연동 복구 | ✅ | 방장 OAuth 토큰으로 업로드, 시그니처 수정 |
+| 1-3 | Flutter Drive 링크 열기 | ✅ | drive_url 있으면 "Drive에서 열기", 없으면 "다운로드" |
+| 1-4 | cleanup_service.py Drive 재시도 스케줄러 | ✅ | 매 1시간 실패 파일 재시도 |
+| 1-5 | sheets_service.py Google Sheets 로깅 | ✅ | 신규 파일, 11개 컬럼, 방별 스프레드시트 |
+| 2-1 | Flutter 폴링 제거 | ✅ | 3초 폴링 완전 제거, WebSocket 재연결 시 1회 동기화 |
+| 3-1 | ThreadPoolExecutor 적용 | ✅ | max_workers=4, threading.Thread 대체 |
+| 3-2 | DB 커넥션 풀 확대 | ✅ | minconn=5, maxconn=20 |
+| 3-2+ | models.py drive_url 쿼리 추가 | ✅ | Message.list_for_room에 af.drive_url 포함 |
 
 ### 테스트 진행 중 🔄
 

@@ -12,11 +12,13 @@ class SocketService {
   final _audioStatusController = StreamController<Map<String, dynamic>>.broadcast();
   final _typingController = StreamController<Map<String, dynamic>>.broadcast();
   final _userJoinedController = StreamController<Map<String, dynamic>>.broadcast();
-  
+  final _reconnectController = StreamController<void>.broadcast();
+
   Stream<Map<String, dynamic>> get onMessage => _messageController.stream;
   Stream<Map<String, dynamic>> get onAudioStatus => _audioStatusController.stream;
   Stream<Map<String, dynamic>> get onTyping => _typingController.stream;
   Stream<Map<String, dynamic>> get onUserJoined => _userJoinedController.stream;
+  Stream<void> get onReconnect => _reconnectController.stream;
   
   bool get isConnected => _socket?.connected ?? false;
   
@@ -44,6 +46,7 @@ class SocketService {
     
     _socket!.onConnect((_) {
       print('[WS] 연결됨');
+      _reconnectController.add(null);
     });
     
     _socket!.onDisconnect((_) {
@@ -110,5 +113,6 @@ class SocketService {
     _audioStatusController.close();
     _typingController.close();
     _userJoinedController.close();
+    _reconnectController.close();
   }
 }

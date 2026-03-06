@@ -103,10 +103,12 @@ def register_message_routes(app, socketio):
         if not Room.is_member(room_id, g.user_id):
             return jsonify({'error': '접근 권한이 없습니다'}), 403
 
-        # 과금: 잔액 확인 (1차 — 잔액 0 이하 차단)
+        # 과금: 방장(room owner)에게 부과
+        room = Room.find_by_id(room_id)
+        owner_id = room['created_by']
         from billing_service import check_can_transcribe, ensure_user_billing, get_audio_duration_fast
-        ensure_user_billing(g.user_id)
-        can_use, reason = check_can_transcribe(g.user_id)
+        ensure_user_billing(owner_id)
+        can_use, reason = check_can_transcribe(owner_id)
         if not can_use:
             return jsonify({'error': reason, 'code': 'INSUFFICIENT_BALANCE'}), 402
 
@@ -130,10 +132,10 @@ def register_message_routes(app, socketio):
         file.save(filepath)
         file_size = os.path.getsize(filepath)
 
-        # 과금: 파일 길이 vs 잔여 시간 비교 (2차 — 부족 시 차단)
+        # 과금: 파일 길이 vs 방장 잔여 시간 비교 (2차 — 부족 시 차단)
         audio_duration = get_audio_duration_fast(filepath)
         if audio_duration:
-            can_use, reason = check_can_transcribe(g.user_id, audio_duration_seconds=audio_duration)
+            can_use, reason = check_can_transcribe(owner_id, audio_duration_seconds=audio_duration)
             if not can_use:
                 os.remove(filepath)
                 return jsonify({'error': reason, 'code': 'INSUFFICIENT_BALANCE'}), 402
@@ -163,9 +165,10 @@ def register_message_routes(app, socketio):
         # 5) 백그라운드에서 STT + Drive 업로드 처리
         thread = threading.Thread(
             target=process_audio_background,
-            args=(app._get_current_object(), socketio, 
-                  filepath, audio['id'], msg['id'], room_id, 
-                  g.user_id, g.user['name'], original_filename, language)
+            args=(app._get_current_object(), socketio,
+                  filepath, audio['id'], msg['id'], room_id,
+                  g.user_id, g.user['name'], original_filename, language,
+                  owner_id)
         )
         thread.daemon = True
         thread.start()
@@ -260,7 +263,8 @@ def register_message_routes(app, socketio):
 # 백그라운드 STT 처리
 # ============================================================
 def process_audio_background(app, socketio, filepath, audio_id, message_id,
-                              room_id, user_id, user_name, original_filename, language):
+                              room_id, user_id, user_name, original_filename, language,
+                              owner_id=None):
     """
     백그라운드에서 음성 파일 처리:
     1. 파일명에서 전화번호/날짜 파싱
@@ -354,9 +358,10 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
 
             logger.info(f"[STT] 변환 완료: {elapsed:.1f}초, {len(transcript_text)}자, 음성길이={duration_seconds:.1f}초")
 
-            # 과금: 사용량 차감
+            # 과금: 방장(owner)에게 사용량 차감
+            billing_user_id = owner_id or user_id
             if duration_seconds > 0:
-                deduct_result = deduct_usage(user_id, audio_id, duration_seconds)
+                deduct_result = deduct_usage(billing_user_id, audio_id, duration_seconds)
                 if deduct_result:
                     logger.info(f"[Billing] 차감 완료: 잔여 {deduct_result['seconds_after']:.0f}초")
 

@@ -8,12 +8,14 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/billing_service.dart';
 import '../constants/terms.dart';
 import '../theme/app_colors.dart';
 import 'audio_picker_screen.dart';
+import '../widgets/ad_banner_widget.dart';
 
 class ChatScreen extends StatefulWidget {
   final int roomId;
@@ -46,9 +48,9 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription? _messageSub;
   StreamSubscription? _audioStatusSub;
   StreamSubscription? _typingSub;
+  StreamSubscription? _reconnectSub;
 
-  // 폴링용 타이머
-  Timer? _pollingTimer;
+  // WebSocket 재연결 시 메시지 동기화용
   int? _lastMessageId;
 
   // dispose에서 안전하게 사용하기 위해 참조 저장
@@ -64,7 +66,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _textController.addListener(_onTextChanged);
     _loadMessages();
     _setupWebSocket();
-    _startPolling();
   }
 
   void _onScroll() {
@@ -85,10 +86,10 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _textController.removeListener(_onTextChanged);
-    _pollingTimer?.cancel();
     _messageSub?.cancel();
     _audioStatusSub?.cancel();
     _typingSub?.cancel();
+    _reconnectSub?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     _recorder.dispose();
@@ -138,9 +139,15 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages[idx] = {
             ..._messages[idx],
             'audio_status': data['status'],
+            if (data['drive_url'] != null) 'drive_url': data['drive_url'],
           };
         }
       });
+    });
+
+    // WebSocket 재연결 시 메시지 동기화 (폴링 대체)
+    _reconnectSub = socket.onReconnect.listen((_) {
+      if (mounted) _loadMessages();
     });
 
     // 타이핑 표시
@@ -154,66 +161,6 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       }
     });
-  }
-
-  // ============================================================
-  // 폴링 (3초마다 새 메시지 확인)
-  // ============================================================
-  void _startPolling() {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _pollNewMessages();
-    });
-  }
-
-  Future<void> _pollNewMessages() async {
-    if (_isLoading || !mounted) return;
-
-    try {
-      final api = context.read<ApiService>();
-      final messages = await api.getMessages(widget.roomId);
-
-      if (!mounted) return;
-
-      // 서버 응답과 현재 상태 비교 후 갱신
-      if (messages.isNotEmpty) {
-        final latestId = messages.first['id'] as int?;
-        final isNewMessage = _lastMessageId != null && latestId != null && latestId > _lastMessageId!;
-
-        // 메시지 수 변경, 새 메시지, reply 변경 모두 감지
-        bool hasChanges = messages.length != _messages.length || isNewMessage;
-
-        if (!hasChanges) {
-          for (int i = 0; i < messages.length && i < _messages.length; i++) {
-            final newReplies = (messages[i]['replies'] as List?) ?? [];
-            final oldReplies = (_messages[i]['replies'] as List?) ?? [];
-            if (newReplies.length != oldReplies.length) {
-              hasChanges = true;
-              break;
-            }
-            // reply 내용 변경 감지 (삭제 후 재생성 등)
-            for (int j = 0; j < newReplies.length && j < oldReplies.length; j++) {
-              if (newReplies[j]['id'] != oldReplies[j]['id']) {
-                hasChanges = true;
-                break;
-              }
-            }
-            if (hasChanges) break;
-          }
-        }
-
-        if (hasChanges) {
-          setState(() {
-            _messages = messages;
-            if (latestId != null) _lastMessageId = latestId;
-          });
-          if (isNewMessage) _scrollToBottom();
-        } else if (_lastMessageId == null && latestId != null) {
-          _lastMessageId = latestId;
-        }
-      }
-    } catch (e) {
-      // 폴링 실패는 조용히 무시 (다음 폴링에서 재시도)
-    }
   }
 
   // ============================================================
@@ -443,7 +390,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final api = context.read<ApiService>();
       await api.uploadAudio(widget.roomId, file);
-      // 폴링이 실제 메시지로 대체해 줌
+      // WebSocket이 실제 메시지로 대체해 줌
       _showError('업로드 완료! 변환 중...');
     } catch (e) {
       // 실패 시 임시 메시지 제거
@@ -494,6 +441,22 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     if (mounted) setState(() => _isUploadingAudio = false);
+  }
+
+  // ============================================================
+  // Drive 링크 열기
+  // ============================================================
+  Future<void> _openDriveUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        _showError('링크를 열 수 없습니다');
+      }
+    } catch (e) {
+      _showError('링크 열기 실패: $e');
+    }
   }
 
   // ============================================================
@@ -1117,12 +1080,19 @@ class _ChatScreenState extends State<ChatScreen> {
                         ],
                       ),
                     ),
-                  // 다운로드 버튼 (audio_id가 있으면 표시)
+                  // Drive 열기 또는 다운로드 버튼
                   if (msg['audio_id'] != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: InkWell(
-                        onTap: () => _downloadAudio(msg['audio_id']),
+                        onTap: () {
+                          final driveUrl = msg['drive_url'] as String?;
+                          if (driveUrl != null && driveUrl.isNotEmpty) {
+                            _openDriveUrl(driveUrl);
+                          } else {
+                            _downloadAudio(msg['audio_id']);
+                          }
+                        },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
@@ -1134,13 +1104,14 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.download,
+                              Icon(
+                                  msg['drive_url'] != null ? Icons.open_in_new : Icons.download,
                                   size: 16,
                                   color: isMe
                                       ? theme.colorScheme.onPrimaryContainer
                                       : theme.colorScheme.primary),
                               const SizedBox(width: 4),
-                              Text('다운로드',
+                              Text(msg['drive_url'] != null ? 'Drive에서 열기' : '다운로드',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
@@ -1233,10 +1204,17 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 음성 저장 버튼
+                          // 음성 저장 또는 Drive 열기 버튼
                           if (msg['audio_id'] != null)
                             InkWell(
-                              onTap: () => _downloadAudio(msg['audio_id']),
+                              onTap: () {
+                                final driveUrl = msg['drive_url'] as String?;
+                                if (driveUrl != null && driveUrl.isNotEmpty) {
+                                  _openDriveUrl(driveUrl);
+                                } else {
+                                  _downloadAudio(msg['audio_id']);
+                                }
+                              },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
@@ -1246,9 +1224,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.download, size: 16, color: theme.colorScheme.primary),
+                                    Icon(msg['drive_url'] != null ? Icons.open_in_new : Icons.download, size: 16, color: theme.colorScheme.primary),
                                     const SizedBox(width: 4),
-                                    Text('음성 저장', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.colorScheme.primary)),
+                                    Text(msg['drive_url'] != null ? 'Drive에서 열기' : '음성 저장', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: theme.colorScheme.primary)),
                                   ],
                                 ),
                               ),
@@ -1467,6 +1445,9 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
+
+          // 배너 광고 (무료 사용자만)
+          const AdBannerWidget(),
 
           // 입력 영역
           Container(
