@@ -290,3 +290,49 @@ class UsageLog:
             (user_id,)
         )
         return float(row['total']) if row else 0
+
+
+# ============================================================
+# 관리자 전용 쿼리
+# ============================================================
+class AdminQueries:
+    @staticmethod
+    def get_stats():
+        """전체 통계"""
+        return {
+            'total_users': (query_one("SELECT COUNT(*) as c FROM users") or {}).get('c', 0),
+            'total_usage_minutes': float((query_one(
+                "SELECT COALESCE(SUM(seconds_used)/60, 0) as m FROM usage_logs"
+            ) or {}).get('m', 0)),
+            'total_revenue': float((query_one(
+                "SELECT COALESCE(SUM(amount), 0) as r FROM payment_transactions WHERE status='approved'"
+            ) or {}).get('r', 0)),
+        }
+
+    @staticmethod
+    def list_users_with_billing():
+        """전체 사용자 + 결제 정보"""
+        return query_all(
+            """SELECT u.id, u.name, u.email, u.avatar_url, u.created_at,
+                      ub.remaining_seconds, ub.subscription_status,
+                      bp.name as plan_name, bp.code as plan_code
+               FROM users u
+               LEFT JOIN user_billing ub ON u.id = ub.user_id
+               LEFT JOIN billing_plans bp ON ub.current_plan_id = bp.id
+               ORDER BY u.created_at DESC"""
+        )
+
+    @staticmethod
+    def recent_transactions(limit=20):
+        """최근 결제 내역"""
+        return query_all(
+            """SELECT pt.*, u.name as user_name, u.email as user_email,
+                      bp.name as plan_name
+               FROM payment_transactions pt
+               JOIN users u ON pt.user_id = u.id
+               LEFT JOIN billing_plans bp ON pt.plan_id = bp.id
+               WHERE pt.status = 'approved'
+               ORDER BY pt.created_at DESC
+               LIMIT %s""",
+            (limit,)
+        )

@@ -74,33 +74,55 @@ class _RoomsScreenState extends State<RoomsScreen> {
   void _showCreateRoomDialog() {
     final nameController = TextEditingController();
     final descController = TextEditingController();
-    
+    bool enableDrive = true;
+    bool enableSheets = true;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         title: const Text('새 채팅방 만들기'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: '채팅방 이름',
-                hintText: '예: 부동산 상담방',
-                border: OutlineInputBorder(),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: '채팅방 이름',
+                  hintText: '예: 부동산 상담방',
+                  border: OutlineInputBorder(),
+                ),
+                autofocus: true,
               ),
-              autofocus: true,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(
-                labelText: '설명 (선택)',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descController,
+                decoration: const InputDecoration(
+                  labelText: '설명 (선택)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
               ),
-              maxLines: 2,
-            ),
-          ],
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('Drive 자동 저장', style: TextStyle(fontSize: 14)),
+                subtitle: const Text('음성파일을 Google Drive에 백업', style: TextStyle(fontSize: 12)),
+                value: enableDrive,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (v) => setDialogState(() => enableDrive = v),
+              ),
+              SwitchListTile(
+                title: const Text('시트 기록', style: TextStyle(fontSize: 14)),
+                subtitle: const Text('변환 결과를 Google Sheets에 기록', style: TextStyle(fontSize: 12)),
+                value: enableSheets,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (v) => setDialogState(() => enableSheets = v),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -111,27 +133,58 @@ class _RoomsScreenState extends State<RoomsScreen> {
             onPressed: () async {
               if (nameController.text.trim().isEmpty) return;
               Navigator.pop(ctx);
-              
+
               try {
                 final api = context.read<ApiService>();
                 final result = await api.createRoom(
                   nameController.text.trim(),
                   description: descController.text.trim(),
+                  enableDriveBackup: enableDrive,
+                  enableSheetsLogging: enableSheets,
                 );
                 
                 final inviteCode = result['invite_code'];
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('채팅방 생성! 초대코드: $inviteCode'),
-                      action: SnackBarAction(
-                        label: '복사',
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: inviteCode));
-                        },
+                  // 초대코드 복사 다이얼로그로 표시
+                  Clipboard.setData(ClipboardData(text: inviteCode));
+                  if (mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('채팅방 생성 완료'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('초대코드가 클립보드에 복사되었습니다.'),
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: SelectableText(
+                                inviteCode,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('확인'),
+                          ),
+                        ],
                       ),
-                    ),
-                  );
+                    );
+                  }
                 }
                 _loadRooms();
               } catch (e) {
@@ -145,6 +198,7 @@ class _RoomsScreenState extends State<RoomsScreen> {
             child: const Text('만들기'),
           ),
         ],
+      ),
       ),
     );
   }

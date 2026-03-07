@@ -6,7 +6,7 @@ import random
 import logging
 from flask import request, jsonify, g
 from auth import login_required
-from models import Room, Message
+from models import Room, Message, query_one
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,13 @@ def register_room_routes(app):
         description = data.get('description', '')
         invite_code = generate_invite_code()
         
+        enable_drive_backup = data.get('enable_drive_backup', True)
+        enable_sheets_logging = data.get('enable_sheets_logging', True)
+
         # 채팅방 생성
-        room = Room.create(name, description, g.user_id, invite_code)
+        room = Room.create(name, description, g.user_id, invite_code,
+                           enable_drive_backup=enable_drive_backup,
+                           enable_sheets_logging=enable_sheets_logging)
         
         # 생성자를 admin으로 추가
         Room.add_member(room['id'], g.user_id, role='admin')
@@ -117,12 +122,88 @@ def register_room_routes(app):
         return jsonify({'room': room})
     
     
+    @app.route('/api/rooms/<int:room_id>', methods=['PATCH'])
+    @login_required
+    def rename_room(room_id):
+        """채팅방 이름 변경 (admin 전용)"""
+        if not Room.is_member(room_id, g.user_id):
+            return jsonify({'error': '접근 권한이 없습니다'}), 403
+
+        member = query_one(
+            "SELECT role FROM room_members WHERE room_id = %s AND user_id = %s",
+            (room_id, g.user_id)
+        )
+        if not member or member['role'] != 'admin':
+            return jsonify({'error': '관리자만 이름을 변경할 수 있습니다'}), 403
+
+        data = request.get_json()
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return jsonify({'error': '새 이름이 필요합니다'}), 400
+
+        room = Room.rename(room_id, new_name)
+        if not room:
+            return jsonify({'error': '채팅방을 찾을 수 없습니다'}), 404
+
+        Message.create(room_id, g.user_id, 'system',
+                       f'채팅방 이름이 "{new_name}"(으)로 변경되었습니다.')
+
+        logger.info(f"채팅방 이름 변경: room={room_id}, new_name={new_name}")
+        return jsonify({'room': room})
+
+    @app.route('/api/rooms/<int:room_id>/settings', methods=['PATCH'])
+    @login_required
+    def update_room_settings(room_id):
+        """채팅방 설정 변경 (admin 전용)"""
+        if not Room.is_member(room_id, g.user_id):
+            return jsonify({'error': '접근 권한이 없습니다'}), 403
+
+        # admin 확인
+        from models import query_one
+        member = query_one(
+            "SELECT role FROM room_members WHERE room_id = %s AND user_id = %s",
+            (room_id, g.user_id)
+        )
+        if not member or member['role'] != 'admin':
+            return jsonify({'error': '관리자만 설정을 변경할 수 있습니다'}), 403
+
+        data = request.get_json()
+        room = Room.update_settings(
+            room_id,
+            enable_drive_backup=data.get('enable_drive_backup'),
+            enable_sheets_logging=data.get('enable_sheets_logging'),
+        )
+        return jsonify({'room': room})
+
     @app.route('/api/rooms/<int:room_id>/members', methods=['GET'])
     @login_required
     def get_room_members(room_id):
         """채팅방 멤버 목록"""
         if not Room.is_member(room_id, g.user_id):
             return jsonify({'error': '접근 권한이 없습니다'}), 403
-        
+
         members = Room.get_members(room_id)
         return jsonify({'members': members})
+
+    @app.route('/api/rooms/<int:room_id>', methods=['DELETE'])
+    @login_required
+    def delete_room(room_id):
+        """채팅방 삭제 (admin 전용)"""
+        if not Room.is_member(room_id, g.user_id):
+            return jsonify({'error': '접근 권한이 없습니다'}), 403
+
+        member = query_one(
+            "SELECT role FROM room_members WHERE room_id = %s AND user_id = %s",
+            (room_id, g.user_id)
+        )
+        if not member or member['role'] != 'admin':
+            return jsonify({'error': '관리자만 삭제할 수 있습니다'}), 403
+
+        room = Room.find_by_id(room_id)
+        if not room:
+            return jsonify({'error': '채팅방을 찾을 수 없습니다'}), 404
+
+        Room.delete(room_id)
+        logger.info(f"채팅방 삭제: room={room_id} (by {g.user['email']})")
+
+        return jsonify({'message': '채팅방이 삭제되었습니다.'}), 200

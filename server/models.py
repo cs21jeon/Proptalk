@@ -75,13 +75,37 @@ class User:
     @staticmethod
     def create(google_id, email, name, avatar_url=None):
         return execute(
-            """INSERT INTO users (google_id, email, name, avatar_url) 
-               VALUES (%s, %s, %s, %s) 
-               ON CONFLICT (google_id) DO UPDATE 
+            """INSERT INTO users (google_id, email, name, avatar_url)
+               VALUES (%s, %s, %s, %s)
+               ON CONFLICT (google_id) DO UPDATE
                SET name = EXCLUDED.name, avatar_url = EXCLUDED.avatar_url
                RETURNING *""",
             (google_id, email, name, avatar_url)
         )
+
+    @staticmethod
+    def update_name(user_id, name):
+        return execute(
+            "UPDATE users SET name = %s WHERE id = %s RETURNING *",
+            (name, user_id)
+        )
+
+    @staticmethod
+    def update_google_tokens(user_id, tokens):
+        import json
+        return execute(
+            "UPDATE users SET google_tokens = %s WHERE id = %s RETURNING *",
+            (json.dumps(tokens), user_id)
+        )
+
+    @staticmethod
+    def get_google_tokens(user_id):
+        result = query_one("SELECT google_tokens FROM users WHERE id = %s", (user_id,))
+        return result['google_tokens'] if result else None
+
+    @staticmethod
+    def list_all():
+        return query_all("SELECT * FROM users ORDER BY created_at DESC")
 
 
 # ============================================================
@@ -89,11 +113,32 @@ class User:
 # ============================================================
 class Room:
     @staticmethod
-    def create(name, description, created_by, invite_code):
+    def create(name, description, created_by, invite_code,
+               enable_drive_backup=True, enable_sheets_logging=True):
         return execute(
-            """INSERT INTO rooms (name, description, created_by, invite_code)
-               VALUES (%s, %s, %s, %s) RETURNING *""",
-            (name, description, created_by, invite_code)
+            """INSERT INTO rooms (name, description, created_by, invite_code,
+               enable_drive_backup, enable_sheets_logging)
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING *""",
+            (name, description, created_by, invite_code,
+             enable_drive_backup, enable_sheets_logging)
+        )
+
+    @staticmethod
+    def update_settings(room_id, enable_drive_backup=None, enable_sheets_logging=None):
+        updates = []
+        params = []
+        if enable_drive_backup is not None:
+            updates.append("enable_drive_backup = %s")
+            params.append(enable_drive_backup)
+        if enable_sheets_logging is not None:
+            updates.append("enable_sheets_logging = %s")
+            params.append(enable_sheets_logging)
+        if not updates:
+            return Room.find_by_id(room_id)
+        params.append(room_id)
+        return execute(
+            f"UPDATE rooms SET {', '.join(updates)} WHERE id = %s RETURNING *",
+            tuple(params)
         )
     
     @staticmethod
@@ -145,6 +190,18 @@ class Room:
             (room_id, user_id)
         )
         return result is not None
+
+    @staticmethod
+    def rename(room_id, new_name):
+        return execute(
+            "UPDATE rooms SET name = %s WHERE id = %s RETURNING *",
+            (new_name, room_id)
+        )
+
+    @staticmethod
+    def delete(room_id):
+        """채팅방 삭제 (CASCADE로 멤버/메시지/음성파일도 삭제)"""
+        execute("DELETE FROM rooms WHERE id = %s", (room_id,))
 
 
 # ============================================================
@@ -202,6 +259,30 @@ class Message:
                WHERE m.parent_id = %s
                ORDER BY m.created_at""",
             (message_id,)
+        )
+
+    @staticmethod
+    def search(room_id, query, limit=100):
+        """메시지 내용 + 음성파일명 + 변환/요약 텍스트 검색"""
+        like_pattern = f'%{query}%'
+        return query_all(
+            """SELECT DISTINCT m.id, m.room_id, m.user_id, m.type, m.content,
+                      m.parent_id, m.created_at,
+                      u.name as user_name, u.avatar_url as user_avatar
+               FROM messages m
+               JOIN users u ON m.user_id = u.id
+               LEFT JOIN audio_files af ON af.message_id = m.id
+               LEFT JOIN messages r ON r.parent_id = m.id
+               WHERE m.room_id = %s AND m.parent_id IS NULL
+                 AND (m.content ILIKE %s
+                      OR af.original_filename ILIKE %s
+                      OR af.transcript_text ILIKE %s
+                      OR af.transcript_summary ILIKE %s
+                      OR r.content ILIKE %s)
+               ORDER BY m.created_at DESC
+               LIMIT %s""",
+            (room_id, like_pattern, like_pattern, like_pattern,
+             like_pattern, like_pattern, limit)
         )
 
 

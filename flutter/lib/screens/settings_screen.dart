@@ -367,9 +367,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(user['name'] ?? '',
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w600)),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(user['name'] ?? '',
+                                          style: theme.textTheme.titleMedium
+                                              ?.copyWith(fontWeight: FontWeight.w600)),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    InkWell(
+                                      onTap: () => _showEditNameDialog(context),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(4),
+                                        child: Icon(Icons.edit, size: 16,
+                                            color: theme.colorScheme.outline),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 2),
                                 Text(user['email'] ?? '',
                                     style: theme.textTheme.bodySmall?.copyWith(
@@ -460,6 +476,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                 ),
 
+                // 관리자 (admin 계정만 표시)
+                if (user?['email'] == 'cs21.jeon@gmail.com') ...[
+                  _buildSectionHeader(theme, '관리자'),
+                  Card(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    child: ListTile(
+                      leading: const Icon(Icons.admin_panel_settings),
+                      title: const Text('관리자 대시보드'),
+                      trailing: const Icon(Icons.open_in_new, size: 18),
+                      onTap: () {
+                        final api = context.read<ApiService>();
+                        final token = api.token ?? '';
+                        _openUrl('https://goldenrabbit.biz/proptalk/admin/login?token=$token');
+                      },
+                    ),
+                  ),
+                ],
+
                 // 계정 섹션
                 _buildSectionHeader(theme, '계정'),
                 Card(
@@ -500,6 +534,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+
+  void _showEditNameDialog(BuildContext context) {
+    final auth = context.read<AuthService>();
+    final controller = TextEditingController(text: auth.currentUser?['name'] ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('이름 변경'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 50,
+          decoration: const InputDecoration(
+            labelText: '이름',
+            hintText: '표시할 이름을 입력하세요',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isEmpty) return;
+              try {
+                await auth.updateName(name);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('이름이 변경되었습니다'), duration: Duration(seconds: 1)),
+                  );
+                  setState(() {});
+                }
+              } catch (e) {
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('이름 변경 실패: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('변경'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildSectionHeader(ThemeData theme, String title) {
     return Padding(

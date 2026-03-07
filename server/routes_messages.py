@@ -8,27 +8,25 @@ import time
 import shutil
 import logging
 import threading
+from datetime import datetime, date
 from flask import request, jsonify, g, send_file
 from werkzeug.utils import secure_filename
 from auth import login_required
 from models import Room, Message, AudioFile
 from config import Config
 
+
+def _serialize(obj):
+    """딕셔너리 내 datetime 객체를 ISO 문자열로 변환"""
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_serialize(v) for v in obj]
+    elif isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return obj
+
 logger = logging.getLogger(__name__)
-
-# Whisper 모델 (지연 로딩)
-_whisper_model = None
-
-
-def get_whisper_model():
-    """Whisper 모델 싱글턴"""
-    global _whisper_model
-    if _whisper_model is None:
-        import whisper
-        logger.info(f"Whisper 모델 로딩: {Config.WHISPER_MODEL}")
-        _whisper_model = whisper.load_model(Config.WHISPER_MODEL, device='cpu')
-        logger.info("Whisper 모델 로딩 완료")
-    return _whisper_model
 
 
 def allowed_file(filename):
@@ -77,13 +75,13 @@ def register_message_routes(app, socketio):
         
         # WebSocket으로 실시간 전송
         socketio.emit('new_message', {
-            'message': {
+            'message': _serialize({
                 **msg,
                 'user_name': g.user['name'],
                 'user_avatar': g.user.get('avatar_url'),
-            }
+            })
         }, room=f'room_{room_id}')
-        
+
         return jsonify({'message': msg}), 201
     
     
@@ -153,22 +151,36 @@ def register_message_routes(app, socketio):
         
         # 4) WebSocket으로 음성 메시지 전송
         socketio.emit('new_message', {
-            'message': {
+            'message': _serialize({
                 **msg,
                 'user_name': g.user['name'],
                 'user_avatar': g.user.get('avatar_url'),
                 'audio_id': audio['id'],
                 'audio_status': 'uploading',
-            }
+            })
         }, room=f'room_{room_id}')
         
         # 5) 백그라운드에서 STT + Drive 업로드 처리
+        room_drive_enabled = room.get('enable_drive_backup', True)
+        room_sheets_enabled = room.get('enable_sheets_logging', True)
+
+        # 방장 Google 토큰 조회 (Drive 업로드용)
+        owner_tokens = None
+        room_drive_folder_id = room.get('drive_folder_id')
+        room_name = room.get('name', 'Unknown')
+        if Config.ENABLE_GOOGLE_DRIVE_BACKUP and room_drive_enabled:
+            from models import User
+            owner = User.find_by_id(room['created_by'])
+            if owner and owner.get('google_tokens'):
+                owner_tokens = owner['google_tokens']
+
         thread = threading.Thread(
             target=process_audio_background,
-            args=(app._get_current_object(), socketio,
+            args=(app, socketio,
                   filepath, audio['id'], msg['id'], room_id,
                   g.user_id, g.user['name'], original_filename, language,
-                  owner_id)
+                  owner_id, room_drive_enabled, room_sheets_enabled,
+                  owner_tokens, room_name, room_drive_folder_id)
         )
         thread.daemon = True
         thread.start()
@@ -180,6 +192,21 @@ def register_message_routes(app, socketio):
         }), 201
     
     
+    # ============================================================
+    # 메시지 검색 (내용 + 파일명 + 변환 텍스트)
+    # ============================================================
+    @app.route('/api/rooms/<int:room_id>/messages/search', methods=['GET'])
+    @login_required
+    def search_messages(room_id):
+        """메시지 검색 (내용/파일명/요약 텍스트)"""
+        if not Room.is_member(room_id, g.user_id):
+            return jsonify({'error': '접근 권한이 없습니다'}), 403
+        q = request.args.get('q', '').strip()
+        if not q:
+            return jsonify({'messages': []})
+        messages = Message.search(room_id, q)
+        return jsonify({'messages': messages})
+
     # ============================================================
     # 음성 파일 검색
     # ============================================================
@@ -264,7 +291,8 @@ def register_message_routes(app, socketio):
 # ============================================================
 def process_audio_background(app, socketio, filepath, audio_id, message_id,
                               room_id, user_id, user_name, original_filename, language,
-                              owner_id=None):
+                              owner_id=None, room_drive_enabled=True, room_sheets_enabled=True,
+                              owner_tokens=None, room_name='Unknown', room_drive_folder_id=None):
     """
     백그라운드에서 음성 파일 처리:
     1. 파일명에서 전화번호/날짜 파싱
@@ -310,10 +338,10 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
                     parent_id=message_id
                 )
                 socketio.emit('new_message', {
-                    'message': {**info_msg, 'user_name': '시스템'}
+                    'message': _serialize({**info_msg, 'user_name': '시스템'})
                 }, room=f'room_{room_id}')
 
-            # --- 2단계: STT 변환 ---
+            # --- 2단계: STT 변환 (OpenAI Whisper API) ---
             AudioFile.update_status(audio_id, 'transcribing')
             socketio.emit('audio_status', {
                 'audio_id': audio_id,
@@ -321,34 +349,20 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
                 'status': 'transcribing',
             }, room=f'room_{room_id}')
 
-            model = get_whisper_model()
+            from whisper_service import transcribe_audio
             start_time = time.time()
 
-            result = model.transcribe(
-                filepath,
-                language=language if language != 'auto' else None,
-                task='transcribe',
-                verbose=False,
-                fp16=False,
-                condition_on_previous_text=True,
-                initial_prompt="이것은 한국어 음성입니다." if language == 'ko' else None,
-            )
+            result = transcribe_audio(filepath, language=language if language != 'auto' else 'ko')
 
             elapsed = time.time() - start_time
             transcript_text = result['text'].strip()
 
             # 세그먼트 정리
-            segments = []
-            for seg in result.get('segments', []):
-                segments.append({
-                    'start': round(seg['start'], 2),
-                    'end': round(seg['end'], 2),
-                    'text': seg['text'].strip(),
-                })
+            segments = result.get('segments', [])
 
             # 음성 길이(초) 추출 + duration_seconds DB 기록
             from billing_service import extract_audio_duration, deduct_usage
-            duration_seconds = extract_audio_duration(result.get('segments', []))
+            duration_seconds = extract_audio_duration(segments)
             if duration_seconds > 0:
                 from models import execute as db_execute
                 db_execute(
@@ -386,50 +400,7 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
                                         transcript_summary=summary_text,
                                         transcript_segments=segments)
 
-            # --- 4단계: 자동 댓글 (요약 + 다운로드 안내) ---
-            if summary_text:
-                reply_content = (
-                    f"📝 **통화 요약**\n\n"
-                    f"{summary_text}\n\n"
-                    f"───────────────────\n\n"
-                    f"⚠️ **{Config.AUDIO_RETENTION_HOURS}시간 후 파일 삭제됩니다.**\n"
-                    f"저장이 필요하면 지금 다운로드 받으세요."
-                )
-            else:
-                # 요약 실패 시 원본 텍스트 표시
-                preview = transcript_text[:300] + '...' if len(transcript_text) > 300 else transcript_text
-                reply_content = (
-                    f"📝 **음성 변환 결과**\n\n"
-                    f"{preview}\n\n"
-                    f"───────────────────\n\n"
-                    f"⚠️ **{Config.AUDIO_RETENTION_HOURS}시간 후 파일 삭제됩니다.**\n"
-                    f"저장이 필요하면 지금 다운로드 받으세요."
-                )
-
-            reply_msg = Message.create(
-                room_id, user_id, 'transcript',
-                reply_content,
-                parent_id=message_id
-            )
-
-            socketio.emit('new_message', {
-                'message': {
-                    **reply_msg,
-                    'user_name': '🤖 자동 변환',
-                    'audio_id': audio_id,
-                    'can_download': True,
-                }
-            }, room=f'room_{room_id}')
-
-            socketio.emit('audio_status', {
-                'audio_id': audio_id,
-                'message_id': message_id,
-                'status': 'completed',
-                'transcript_preview': transcript_text[:100],
-                'has_summary': summary_text is not None,
-            }, room=f'room_{room_id}')
-
-            # --- 5단계: 파일을 보관 폴더로 이동 (24시간 보관) ---
+            # --- 4단계: 파일을 보관 폴더로 이동 ---
             ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'mp3'
             audio_folder = Config.AUDIO_FOLDER
             os.makedirs(audio_folder, exist_ok=True)
@@ -438,28 +409,77 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
             shutil.move(filepath, permanent_path)
             logger.info(f"[파일] 보관 폴더로 이동: {permanent_path}")
 
-            # --- 6단계: (선택) Google Drive 업로드 ---
-            if Config.ENABLE_GOOGLE_DRIVE_BACKUP:
+            # --- 5단계: (선택) Google Drive 업로드 ---
+            drive_uploaded = False
+            if Config.ENABLE_GOOGLE_DRIVE_BACKUP and room_drive_enabled and owner_tokens:
                 try:
                     from drive_service import upload_to_drive
-                    from datetime import datetime
 
-                    subfolder = datetime.now().strftime('%Y-%m')
                     drive_result = upload_to_drive(
-                        permanent_path, original_filename,
-                        subfolder=subfolder
+                        owner_tokens, permanent_path, room_name,
+                        room_folder_id=room_drive_folder_id,
+                        upload_filename=original_filename
                     )
 
                     if drive_result:
                         AudioFile.update_drive(
                             audio_id,
                             drive_result['file_id'],
-                            drive_result['url']
+                            drive_result.get('web_link', '')
                         )
+                        drive_uploaded = True
                         logger.info(f"[Drive] 업로드 성공: {drive_result['file_id']}")
+
+                        if drive_result.get('updated_tokens'):
+                            from models import User
+                            User.update_google_tokens(owner_id, drive_result['updated_tokens'])
 
                 except Exception as e:
                     logger.error(f"[Drive] 업로드 실패: {e}")
+
+            # --- 6단계: 자동 댓글 (요약 + Drive/삭제 안내) ---
+            if drive_uploaded:
+                if summary_text:
+                    reply_content = f"{summary_text}\n\n---\n\n☁️ **Google Drive에 저장되었습니다.**"
+                else:
+                    reply_content = "📝 음성 변환 완료\n\n요약을 생성하지 못했습니다.\n\n---\n\n☁️ **Google Drive에 저장되었습니다.**"
+            else:
+                if summary_text:
+                    reply_content = f"{summary_text}\n\n---\n\n⚠️ **{Config.AUDIO_RETENTION_HOURS}시간 후 파일이 삭제됩니다.** 저장이 필요하면 다운로드하세요."
+                else:
+                    reply_content = f"📝 음성 변환 완료\n\n요약을 생성하지 못했습니다.\n\n---\n\n⚠️ **{Config.AUDIO_RETENTION_HOURS}시간 후 파일이 삭제됩니다.** 저장이 필요하면 다운로드하세요."
+
+            reply_msg = Message.create(
+                room_id, user_id, 'transcript',
+                reply_content,
+                parent_id=message_id
+            )
+
+            socketio.emit('new_message', {
+                'message': _serialize({
+                    **reply_msg,
+                    'user_name': '🤖 자동 변환',
+                    'audio_id': audio_id,
+                    'can_download': True,
+                })
+            }, room=f'room_{room_id}')
+
+            socketio.emit('audio_status', {
+                'audio_id': audio_id,
+                'message_id': message_id,
+                'status': 'completed',
+                'transcript_preview': transcript_text[:100],
+                'has_summary': summary_text is not None,
+                'drive_uploaded': drive_uploaded,
+            }, room=f'room_{room_id}')
+
+            # Drive 저장 완료 시 서버 파일 삭제
+            if drive_uploaded:
+                try:
+                    os.remove(permanent_path)
+                    logger.info(f"[파일] 서버 삭제 (Drive 저장됨): {permanent_path}")
+                except Exception as e:
+                    logger.warning(f"[파일] 서버 삭제 실패: {e}")
 
             logger.info(f"[STT] 전체 처리 완료: audio_id={audio_id}")
 

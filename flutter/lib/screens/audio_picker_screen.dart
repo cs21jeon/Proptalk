@@ -62,23 +62,24 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
     });
 
     try {
-      // 권한 확인
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-      }
-
-      // Android 11+ 에서는 manageExternalStorage 권한 필요
+      // 권한 확인 - Android 13+는 audio 권한, 이전은 storage 권한
       if (Platform.isAndroid) {
-        var manageStatus = await Permission.manageExternalStorage.status;
-        if (!manageStatus.isGranted) {
-          manageStatus = await Permission.manageExternalStorage.request();
+        PermissionStatus status;
+        // Android 13+ (API 33+)
+        if (await Permission.audio.status.isDenied) {
+          status = await Permission.audio.request();
+        } else {
+          status = await Permission.audio.status;
         }
 
-        // 권한이 거부된 경우
-        if (!manageStatus.isGranted) {
+        // audio 권한이 없으면 storage 권한 시도 (Android 12 이하)
+        if (!status.isGranted) {
+          status = await Permission.storage.request();
+        }
+
+        if (!status.isGranted) {
           setState(() {
-            _errorMessage = '파일 접근 권한이 필요합니다.\n설정에서 "모든 파일 접근" 권한을 허용해주세요.';
+            _errorMessage = '오디오 파일 접근 권한이 필요합니다.\n설정에서 권한을 허용해주세요.';
             _isLoading = false;
             _showPermissionDenied = true;
           });
@@ -214,13 +215,10 @@ class _AudioPickerScreenState extends State<AudioPickerScreen> {
               if (_showPermissionDenied) ...[
                 ElevatedButton.icon(
                   onPressed: () async {
-                    final status = await Permission.manageExternalStorage.request();
-                    if (status.isGranted) {
-                      _loadAudioFiles();
-                    }
+                    await openAppSettings();
                   },
-                  icon: const Icon(Icons.folder_open),
-                  label: const Text('파일 접근 권한 허용'),
+                  icon: const Icon(Icons.settings),
+                  label: const Text('설정에서 권한 허용'),
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(220, 48),
                   ),

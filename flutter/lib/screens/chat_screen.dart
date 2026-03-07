@@ -53,6 +53,13 @@ class _ChatScreenState extends State<ChatScreen> {
   // WebSocket 재연결 시 메시지 동기화용
   int? _lastMessageId;
 
+  // 검색 관련
+  bool _isSearchMode = false;
+  List<dynamic> _searchResults = [];
+  int _currentSearchIndex = -1;
+  final TextEditingController _searchController = TextEditingController();
+  int? _highlightedMessageId;
+
   // dispose에서 안전하게 사용하기 위해 참조 저장
   late final AuthService _auth;
   late String _roomName;
@@ -91,6 +98,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _typingSub?.cancel();
     _reconnectSub?.cancel();
     _textController.dispose();
+    _searchController.dispose();
     _scrollController.dispose();
     _recorder.dispose();
 
@@ -589,15 +597,15 @@ class _ChatScreenState extends State<ChatScreen> {
       final isAdmin = members.any((m) => m['id'] == myId && m['role'] == 'admin');
 
       if (!mounted) return;
+      final nameController = TextEditingController(text: _roomName);
+      bool isEditingName = false;
+      final currentPending = List<dynamic>.from(pendingMembers);
+
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setSheetState) {
-            final currentPending = List<dynamic>.from(pendingMembers);
-            final nameController = TextEditingController(text: _roomName);
-            bool isEditingName = false;
-
             return SafeArea(
               child: SizedBox(
               height: MediaQuery.of(context).size.height * 0.9,
@@ -730,6 +738,51 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                     ),
+
+                    // Drive/Sheets 설정 (admin만 변경 가능)
+                    if (isAdmin) ...[
+                      const SizedBox(height: 12),
+                      Card(
+                        child: Column(
+                          children: [
+                            SwitchListTile(
+                              title: const Text('Drive 자동 저장'),
+                              subtitle: const Text('음성파일을 Google Drive에 백업'),
+                              value: room['enable_drive_backup'] ?? true,
+                              onChanged: (v) async {
+                                try {
+                                  await api.updateRoomSettings(widget.roomId, enableDriveBackup: v);
+                                  setSheetState(() => room['enable_drive_backup'] = v);
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text('설정 변경 실패: $e')),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                            SwitchListTile(
+                              title: const Text('시트 기록'),
+                              subtitle: const Text('변환 결과를 Google Sheets에 기록'),
+                              value: room['enable_sheets_logging'] ?? true,
+                              onChanged: (v) async {
+                                try {
+                                  await api.updateRoomSettings(widget.roomId, enableSheetsLogging: v);
+                                  setSheetState(() => room['enable_sheets_logging'] = v);
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text('설정 변경 실패: $e')),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     // 승인 대기 섹션 (admin에게만 표시)
                     if (currentPending.isNotEmpty) ...[
@@ -1002,7 +1055,26 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final replies = msg['replies'] as List? ?? [];
 
-    return Padding(
+    return GestureDetector(
+      onLongPress: () {
+        String textToCopy = msg['content'] ?? '';
+        if (type == 'audio' && replies.isNotEmpty) {
+          final replyTexts = replies.map((r) => r['content'] ?? '').where((s) => s.isNotEmpty).join('\n\n');
+          if (replyTexts.isNotEmpty) {
+            textToCopy = textToCopy.isNotEmpty ? '$textToCopy\n\n$replyTexts' : replyTexts;
+          }
+        }
+        if (textToCopy.isNotEmpty) {
+          Clipboard.setData(ClipboardData(text: textToCopy));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('메시지가 복사되었습니다'), duration: Duration(seconds: 1)),
+          );
+        }
+      },
+      child: Container(
+      color: _highlightedMessageId == msg['id']
+          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
+          : null,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Column(
         crossAxisAlignment:
@@ -1018,7 +1090,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
 
           // 메시지 버블
-          Container(
+          Align(
+            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.75,
             ),
@@ -1140,6 +1214,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ],
             ),
+          ),
           ),
 
           // 시간
@@ -1271,16 +1346,110 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ],
       ),
+    ),
     );
+  }
+
+  // ============================================================
+  // 검색 기능
+  // ============================================================
+  void _performSearch(String query) async {
+    if (query.trim().isEmpty) return;
+    try {
+      final api = context.read<ApiService>();
+      final results = await api.searchMessages(widget.roomId, query.trim());
+      setState(() {
+        _searchResults = results;
+        _currentSearchIndex = results.isNotEmpty ? 0 : -1;
+        if (results.isNotEmpty) {
+          _highlightedMessageId = results[0]['id'];
+          _scrollToMessage(results[0]['id']);
+        } else {
+          _highlightedMessageId = null;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('검색 실패: $e'), duration: const Duration(seconds: 1)),
+        );
+      }
+    }
+  }
+
+  void _nextSearchResult() {
+    if (_searchResults.isEmpty) return;
+    setState(() {
+      _currentSearchIndex = (_currentSearchIndex + 1) % _searchResults.length;
+      _highlightedMessageId = _searchResults[_currentSearchIndex]['id'];
+      _scrollToMessage(_highlightedMessageId!);
+    });
+  }
+
+  void _prevSearchResult() {
+    if (_searchResults.isEmpty) return;
+    setState(() {
+      _currentSearchIndex = (_currentSearchIndex - 1 + _searchResults.length) % _searchResults.length;
+      _highlightedMessageId = _searchResults[_currentSearchIndex]['id'];
+      _scrollToMessage(_highlightedMessageId!);
+    });
+  }
+
+  void _scrollToMessage(int messageId) {
+    // ValueKey로 해당 메시지의 BuildContext를 찾아 스크롤
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = ValueKey<int>(messageId);
+      final elementFinder = _findElementByKey(context, key);
+      if (elementFinder != null) {
+        Scrollable.ensureVisible(
+          elementFinder,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          alignment: 0.4, // 화면 40% 위치에 표시
+        );
+      }
+    });
+  }
+
+  BuildContext? _findElementByKey(BuildContext context, ValueKey<int> key) {
+    BuildContext? result;
+    void visitor(Element element) {
+      if (element.widget.key == key) {
+        result = element;
+        return;
+      }
+      element.visitChildren(visitor);
+    }
+    (context as Element).visitChildren(visitor);
+    return result;
+  }
+
+  void _exitSearch() {
+    setState(() {
+      _isSearchMode = false;
+      _searchResults = [];
+      _currentSearchIndex = -1;
+      _highlightedMessageId = null;
+      _searchController.clear();
+    });
   }
 
   String _formatTime(dynamic dateStr) {
     if (dateStr == null) return '';
     try {
       final dt = DateTime.parse(dateStr.toString()).toLocal();
+      final now = DateTime.now();
       final hour = dt.hour.toString().padLeft(2, '0');
       final min = dt.minute.toString().padLeft(2, '0');
-      return '$hour:$min';
+      final time = '$hour:$min';
+
+      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+        return time;
+      } else if (dt.year != now.year) {
+        return '${dt.year}.${dt.month.toString().padLeft(2, '0')}.${dt.day.toString().padLeft(2, '0')} $time';
+      } else {
+        return '${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')} $time';
+      }
     } catch (_) {
       return '';
     }
@@ -1294,7 +1463,43 @@ class _ChatScreenState extends State<ChatScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: _isSearchMode
+        ? AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _exitSearch,
+            ),
+            title: TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '메시지 검색...',
+                border: InputBorder.none,
+              ),
+              onSubmitted: _performSearch,
+            ),
+            actions: [
+              if (_searchResults.isNotEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      '${_currentSearchIndex + 1}/${_searchResults.length}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ),
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_up),
+                onPressed: _prevSearchResult,
+              ),
+              IconButton(
+                icon: const Icon(Icons.keyboard_arrow_down),
+                onPressed: _nextSearchResult,
+              ),
+            ],
+          )
+        : AppBar(
         title: Column(
           children: [
             Text(_roomName, style: const TextStyle(fontSize: 16)),
@@ -1307,8 +1512,8 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            tooltip: '음성파일 검색',
-            onPressed: () => _showAudioSearch(),
+            tooltip: '메시지 검색',
+            onPressed: () => setState(() => _isSearchMode = true),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -1387,7 +1592,15 @@ class _ChatScreenState extends State<ChatScreen> {
                           ],
                         ),
                       )
-                    : ListView.builder(
+                    : RawScrollbar(
+                        controller: _scrollController,
+                        thumbVisibility: false,
+                        thickness: 6,
+                        radius: const Radius.circular(3),
+                        fadeDuration: const Duration(milliseconds: 300),
+                        timeToFade: const Duration(seconds: 2),
+                        padding: const EdgeInsets.only(right: 2),
+                        child: ListView.builder(
                         controller: _scrollController,
                         reverse: true,
                         padding: const EdgeInsets.only(top: 8, bottom: 8),
@@ -1427,12 +1640,14 @@ class _ChatScreenState extends State<ChatScreen> {
                           }
 
                           return Column(
+                            key: ValueKey<int>(msg['id'] ?? i),
                             children: [
                               if (dateSeparator != null) dateSeparator,
                               _buildMessageItem(msg, showName: showName),
                             ],
                           );
                         },
+                      ),
                       ),
                 // Scroll-to-bottom FAB
                 if (_showScrollToBottom)

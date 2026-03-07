@@ -1,6 +1,6 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-07 (Google Play Console 출시 준비 + UI 수정)
+> 최종 업데이트: 2026-03-08 (긴급 버그 수정 4건 + Whisper API 전환 + Drive 업로드 복구)
 
 ## 프로젝트 개요
 
@@ -137,6 +137,26 @@
 | **법적 문서 라우트** | ✅ | /proptalk/terms, /privacy, /payment-terms Flask 라우트 + 모든 HTML 링크 통일 |
 | **Nginx ^~ /proptalk/ 통합** | ✅ | 별도 /proptalk/billing/ → 단일 ^~ /proptalk/ 블록으로 통합 |
 | **Nginx 미사용 설정 삭제** | ✅ | voiceroom/n8n/building-service config 삭제, goldenrabbit.us SSL 인증서 삭제 |
+
+### 긴급 버그 수정 + Whisper API 전환 + Drive 복구 (2026-03-08) ✅
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| `_get_current_object()` 크래시 수정 | ✅ | routes_messages.py: `app._get_current_object()` → `app` (Flask 객체에 없는 메서드) |
+| 채팅방 삭제 엔드포인트 추가 | ✅ | routes_rooms.py: `DELETE /api/rooms/<id>` + models.py: `Room.delete()` |
+| 채팅방 이름변경 엔드포인트 추가 | ✅ | routes_rooms.py: `PATCH /api/rooms/<id>` + models.py: `Room.rename()` |
+| 이름변경 UI 버그 수정 | ✅ | chat_screen.dart: `isEditingName` 변수가 StatefulBuilder 내부에서 매번 초기화 → 외부로 이동 |
+| PyTorch 다운그레이드 | ✅ | torch 2.10.0 → 2.5.1+cpu (oneDNN `could not create a primitive` 크래시 해결) |
+| openai-whisper 다운그레이드 | ✅ | 20250625 → 20240930 (원래 안정 버전) |
+| setuptools 버전 고정 | ✅ | <81 (82+에서 pkg_resources 제거됨) |
+| **Whisper 로컬 → OpenAI API 전환** | ✅ | routes_messages.py: `whisper.load_model()` 제거 → `whisper_service.py` (OpenAI API `whisper-1`) 사용 |
+| CLAUDE.md 규칙 추가 | ✅ | "NEVER use local whisper model" 명시 — 향후 수정 시에도 API 방식 강제 |
+| **Drive 토큰 교환 복구** | ✅ | auth.py: `server_auth_code` → access/refresh token 교환 + DB 저장 로직 추가 |
+| Drive 업로드 시그니처 수정 | ✅ | routes_messages.py: `upload_to_drive(owner_tokens, path, room_name, ...)` 올바른 시그니처로 변경 |
+| Drive 파일명 수정 | ✅ | `upload_filename=original_filename` 전달 → 원래 파일명으로 Drive 저장 |
+| Drive/삭제 메시지 분기 | ✅ | Drive 성공: `☁️ Google Drive에 저장되었습니다.` / 실패: `⚠️ 24시간 후 삭제` |
+| Drive 성공 시 서버 파일 삭제 | ✅ | Drive 업로드 완료 후 서버 로컬 파일 즉시 삭제 |
+| User 모델 메서드 추가 | ✅ | `update_google_tokens()`, `get_google_tokens()` 추가 |
 
 ### 서버 확장성 개선 (2026-03-07) ✅
 
@@ -442,6 +462,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `2026-03-07` - 서버 확장성 개선 (Drive 복구 + Sheets + 폴링 제거 + ThreadPool + DB풀)
 - `2026-03-07` - UI 수정 (이모지 아이콘, 중복 메시지, 원본 파일명, 라벨 제거)
 - `2026-03-07` - Google Play Console 출시 준비 (릴리스 서명, 스토어 등록, 계정 삭제 페이지)
+- `2026-03-08` - 긴급 버그 수정 4건 (업로드/삭제/이름변경/다운로드) + Whisper API 전환 + Drive 업로드 복구
 
 ---
 
@@ -652,6 +673,26 @@ Proptalk/
 ### 11. OAuth audience 불일치 (2026-03-02)
 - **원인**: 서버 GOOGLE_CLIENT_ID가 옛날 프로젝트 값으로 남아있음
 - **해결**: PM2 delete → start로 환경변수 완전 갱신
+
+### 12. `_get_current_object()` 크래시 (2026-03-08)
+- **원인**: `register_message_routes(app, socketio)`의 `app`은 실제 Flask 객체인데, Werkzeug LocalProxy 전용 메서드 `_get_current_object()` 호출
+- **증상**: 업로드 201 성공하지만 백그라운드 스레드 미실행 → STT/요약/다운로드 전부 실패
+- **해결**: `app._get_current_object()` → `app`
+
+### 13. PyTorch 2.10.0 oneDNN 크래시 (2026-03-08)
+- **원인**: 956MB RAM 서버에서 PyTorch 2.10.0의 oneDNN 엔진이 primitive 생성 실패
+- **증상**: `RuntimeError: could not create a primitive` — 환경변수(`ONEDNN_PRIMITIVE_CACHE_CAPACITY=0`)로도 해결 안 됨
+- **해결**: torch 2.10.0 → 2.5.1+cpu 다운그레이드, openai-whisper 20250625 → 20240930 복원
+
+### 14. Whisper 로컬 → API 전환 (2026-03-08)
+- **원인**: 서버 메모리 부족으로 로컬 Whisper 불안정, 반복적 크래시
+- **해결**: `whisper_service.py` (OpenAI Whisper API `whisper-1`) 사용으로 전환. CLAUDE.md에 규칙 명시하여 향후 변경 방지
+- **효과**: 52초 음성 처리 시간 56초 → 4~7초, 정확도 향상
+
+### 15. Google Drive `invalid_scope` (2026-03-08)
+- **원인**: `auth.py`에 `server_auth_code` → Drive 토큰 교환 로직 누락. Flutter가 serverAuthCode를 보내도 서버가 무시
+- **증상**: DB의 google_tokens가 오래된 토큰 → Drive API 호출 시 `invalid_scope: Bad Request`
+- **해결**: `auth.py`에 `exchange_auth_code()` 함수 + `google_login()`에 토큰 교환 로직 추가
 
 ---
 

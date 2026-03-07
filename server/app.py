@@ -55,6 +55,7 @@ from routes_rooms import register_room_routes
 from routes_messages import register_message_routes
 from routes_billing import register_billing_routes
 from billing_web import register_billing_web_routes
+from routes_admin import register_admin_routes
 from websocket import register_websocket
 
 register_auth_routes(app)
@@ -62,6 +63,7 @@ register_room_routes(app)
 register_message_routes(app, socketio)
 register_billing_routes(app)
 register_billing_web_routes(app)
+register_admin_routes(app)
 register_websocket(socketio)
 
 # ============================================================

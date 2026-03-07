@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+{% set active = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h2 style="font-size:20px;margin-bottom:16px;font-weight:700;">Dashboard</h2>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="value">{{ stats.total_users }}</div>
+        <div class="label">Users</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ "%.0f"|format(stats.total_usage_minutes) }}</div>
+        <div class="label">Usage (min)</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ "{:,.0f}".format(stats.total_revenue) }}</div>
+        <div class="label">Revenue (KRW)</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Recent Transactions</h3>
+    {% if recent %}
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>User</th>
+                <th>Plan</th>
+                <th class="text-right">Amount</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tx in recent %}
+            <tr>
+                <td>{{ tx.created_at.strftime('%m/%d %H:%M') if tx.created_at else '-' }}</td>
+                <td>{{ tx.user_name }}</td>
+                <td>{{ tx.plan_name or '-' }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(tx.amount or 0) }}</td>
+                <td><span class="badge badge-active">{{ tx.status }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p style="color: #999; font-size: 14px;">No transactions yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

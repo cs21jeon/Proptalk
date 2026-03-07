@@ -55,6 +55,16 @@ class ApiService {
     return _handleResponse(response);
   }
   
+  /// 프로필 이름 변경
+  Future<Map<String, dynamic>> updateProfile({required String name}) async {
+    final response = await _client.patch(
+      Uri.parse('$baseUrl/api/auth/profile'),
+      headers: _headers,
+      body: jsonEncode({'name': name}),
+    );
+    return _handleResponse(response);
+  }
+
   // ============================================================
   // 채팅방
   // ============================================================
@@ -70,14 +80,36 @@ class ApiService {
   }
   
   /// 채팅방 생성
-  Future<Map<String, dynamic>> createRoom(String name, {String? description}) async {
+  Future<Map<String, dynamic>> createRoom(String name, {
+    String? description,
+    bool enableDriveBackup = true,
+    bool enableSheetsLogging = true,
+  }) async {
     final response = await _client.post(
       Uri.parse('$baseUrl/api/rooms'),
       headers: _headers,
       body: jsonEncode({
         'name': name,
         'description': description ?? '',
+        'enable_drive_backup': enableDriveBackup,
+        'enable_sheets_logging': enableSheetsLogging,
       }),
+    );
+    return _handleResponse(response);
+  }
+
+  /// 채팅방 설정 변경
+  Future<Map<String, dynamic>> updateRoomSettings(int roomId, {
+    bool? enableDriveBackup,
+    bool? enableSheetsLogging,
+  }) async {
+    final body = <String, dynamic>{};
+    if (enableDriveBackup != null) body['enable_drive_backup'] = enableDriveBackup;
+    if (enableSheetsLogging != null) body['enable_sheets_logging'] = enableSheetsLogging;
+    final response = await _client.patch(
+      Uri.parse('$baseUrl/api/rooms/$roomId/settings'),
+      headers: _headers,
+      body: jsonEncode(body),
     );
     return _handleResponse(response);
   }
@@ -104,7 +136,17 @@ class ApiService {
   // ============================================================
   // 메시지
   // ============================================================
-  
+
+  /// 메시지 검색
+  Future<List<dynamic>> searchMessages(int roomId, String query) async {
+    final response = await _client.get(
+      Uri.parse('$baseUrl/api/rooms/$roomId/messages/search?q=${Uri.encodeComponent(query)}'),
+      headers: _headers,
+    );
+    final data = _handleResponse(response);
+    return data['messages'] ?? [];
+  }
+
   /// 메시지 목록
   Future<List<dynamic>> getMessages(int roomId, {int? beforeId, int limit = 50}) async {
     var url = '$baseUrl/api/rooms/$roomId/messages?limit=$limit';

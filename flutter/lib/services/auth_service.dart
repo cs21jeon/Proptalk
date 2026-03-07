@@ -121,6 +121,13 @@ class AuthService extends ChangeNotifier {
     }
   }
   
+  /// 프로필 이름 변경
+  Future<void> updateName(String name) async {
+    final data = await api.updateProfile(name: name);
+    _currentUser = data['user'];
+    notifyListeners();
+  }
+
   /// 동의 완료 처리
   void markConsentCompleted() {
     _consentRequired = false;
