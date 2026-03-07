@@ -50,6 +50,9 @@ credentials/
 *.log
 logs/
 
+# Deploy patches (may contain credentials)
+server/deploy/
+
 # Temp
 *.tmp
 temp/

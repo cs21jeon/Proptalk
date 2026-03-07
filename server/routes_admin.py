@@ -3,6 +3,8 @@
 - ADMIN_EMAIL 환경변수와 일치하는 사용자만 접근 가능
 """
 import logging
+import requests as http_requests
+from datetime import datetime, timezone
 from functools import wraps
 from flask import request, jsonify, g, render_template, redirect, session
 from auth import login_required, decode_token
@@ -108,6 +110,7 @@ def register_admin_routes(app):
     def admin_dashboard():
         stats = AdminQueries.get_stats()
         recent = AdminQueries.recent_transactions(10)
+
         return render_template('admin/dashboard.html',
                                stats=stats, recent=recent)
 
