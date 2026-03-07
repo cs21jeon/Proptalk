@@ -303,10 +303,10 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
                 parsed_info.append(f"👤 {parsed['name']}")
 
             if parsed_info:
-                info_text = ' | '.join(parsed_info)
+                info_text = '\n'.join(parsed_info)
                 info_msg = Message.create(
                     room_id, user_id, 'system',
-                    f"파일 정보: {info_text}",
+                    f"파일정보\n{info_text}",
                     parent_id=message_id
                 )
                 socketio.emit('new_message', {

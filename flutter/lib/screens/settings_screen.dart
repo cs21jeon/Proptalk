@@ -8,6 +8,7 @@ import '../services/billing_service.dart';
 import '../constants/terms.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
+import '../widgets/propnet_footer.dart';
 import 'billing_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -492,20 +493,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 8),
 
                 // 앱 정보
-                Center(
-                  child: Text(
-                    'Proptalk v1.0.0\ncs21.jeon@gmail.com',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ),
+                const PropnetFooter(),
                 const SizedBox(height: 24),
               ],
             ),
     );
   }
+
 
   Widget _buildSectionHeader(ThemeData theme, String title) {
     return Padding(

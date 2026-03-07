@@ -123,6 +123,10 @@ class _ChatScreenState extends State<ChatScreen> {
             _messages[parentIdx] = parent;
           }
         } else {
+          // audio 타입 메시지가 오면 임시(optimistic) 메시지 제거
+          if (msg['type'] == 'audio') {
+            _messages.removeWhere((m) => (m['id'] as int?) != null && (m['id'] as int) < 0);
+          }
           _messages.insert(0, msg);
         }
       });

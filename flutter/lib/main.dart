@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'services/billing_service.dart';
+import 'services/ad_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/rooms_screen.dart';
 import 'screens/consent_screen.dart';
@@ -11,6 +12,9 @@ import 'theme/theme_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // AdMob 초기화
+  AdService().initialize();
 
   final apiService = ApiService();
   final authService = AuthService(apiService);

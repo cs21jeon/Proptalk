@@ -1,6 +1,6 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-05 (파비콘 + 프로필 화면 UX 개선)
+> 최종 업데이트: 2026-03-07 (Google Play Console 출시 준비 + UI 수정)
 
 ## 프로젝트 개요
 
@@ -50,6 +50,11 @@
 40. **파비콘 통일** (랜딩페이지 + 법적문서 3개에 투명 풀사이즈 Proptalk 아이콘 적용) ✅ **신규**
 41. **프로필 화면 UX 개선** (아바타 팝업메뉴 제거 → 탭하면 바로 프로필 화면, 설정→프로필 타이틀 변경) ✅ **신규**
 42. **서버 확장성 개선** (Drive 연동 복구 + Sheets 로깅 + 폴링 제거 + ThreadPool + DB풀 확대) ✅ **신규**
+43. **UI 수정** (파일정보 이모지 아이콘, 중복 메시지 제거, Drive 원본 파일명, 시스템/자동변환 라벨 제거) ✅ **신규**
+44. **Google Play Console 출시 준비** (릴리스 서명, 스토어 등록정보, 데이터 안전, 계정 삭제 페이지) ✅ **신규**
+45. **계정 삭제 요청 페이지** (/proptalk/delete-account 웹페이지 + API) ✅ **신규**
+46. **MANAGE_EXTERNAL_STORAGE 권한 제거** (file_picker SAF 사용으로 불필요) ✅ **신규**
+47. **광고 ID 권한 추가** (AD_ID permission for AdMob) ✅ **신규**
 
 ---
 
@@ -63,10 +68,10 @@
 | Nginx 프록시 | ✅ | /voiceroom/ + ^~ /proptalk/ 경로 |
 | PostgreSQL DB | ✅ | voiceroom DB (google_tokens, drive_folder_id 추가) |
 | Google OAuth + Drive | ✅ | `speech-to-text-goldenrabbit` 프로젝트, drive.file 스코프 |
-| Flutter 앱 빌드 | ✅ | Release APK (50.7MB) |
+| Flutter 앱 빌드 | ✅ | Release AAB (50.3MB), 릴리스 키 서명 |
 | 채팅방 기능 | ✅ | 생성/참여/메시지, 방 생성 시 Drive 폴더 자동 생성 |
 | 파일 업로드 | ✅ | 3GP/AMR 자동 감지 → MP3 변환 |
-| 커스텀 파일 브라우저 | ✅ | 최신순 정렬, MANAGE_EXTERNAL_STORAGE 권한 |
+| 커스텀 파일 브라우저 | ✅ | 최신순 정렬, SAF(Storage Access Framework) 방식 |
 | **OpenAI Whisper STT** | ✅ | 무제한 길이 지원 (자동 분할) |
 | **Claude 요약** | ✅ | 마크다운 구조화 (볼드 키워드 + 불릿) |
 | **Google Drive 연동** | ✅ | 방장 Drive에 자동 저장, 서버 파일 즉시 삭제 |
@@ -147,11 +152,30 @@
 | 3-2 | DB 커넥션 풀 확대 | ✅ | minconn=5, maxconn=20 |
 | 3-2+ | models.py drive_url 쿼리 추가 | ✅ | Message.list_for_room에 af.drive_url 포함 |
 
+### Google Play Console 출시 준비 (2026-03-07) 🔄
+
+| 항목 | 상태 | 비고 |
+|------|------|--------|
+| 릴리스 키 서명 | ✅ | proptalk-release.jks (RSA 2048, CN=Propnet) |
+| AAB 빌드 | ✅ | 버전 1.0.0+3, 릴리스 서명, 50.3MB |
+| 스토어 등록정보 | ✅ | 간단/전체 설명, 스크린샷 (폰/7인치/10인치) |
+| 개인정보처리방침 URL | ✅ | https://goldenrabbit.biz/proptalk/privacy |
+| 계정 삭제 URL | ✅ | https://goldenrabbit.biz/proptalk/delete-account |
+| 데이터 안전 섹션 | ✅ | 수집 데이터 유형 전체 선언 완료 |
+| 광고 ID 선언 | ✅ | AD_ID 권한 추가, AdMob 사용 선언 |
+| MANAGE_EXTERNAL_STORAGE 제거 | ✅ | SAF 방식으로 대체, Google 심사 회피 |
+| 금융 기능 선언 | ✅ | "금융 기능 제공하지 않음" |
+| 건강 선언 | ✅ | "건강 관련 아님" |
+| 콘텐츠 등급 | 🔄 | 설문 작성 필요 |
+| 비공개 테스트 트랙 출시 | 🔄 | 버전 코드 1 제거 후 재출시 필요 |
+| Google Sheets API 활성화 | ❌ | GCP Console에서 수동 활성화 필요 |
+
 ### 테스트 진행 중 🔄
 
 | 항목 | 상태 | 비고 |
 |------|------|--------|
-| Google Drive 전체 플로우 | 🔄 | 로그인 → Drive 동의 → 방 생성 → 업로드 → Drive 저장 |
+| Google Drive 전체 플로우 | ✅ | Drive 업로드 정상 동작 확인 |
+| Google Sheets 로깅 | ❌ | Sheets API 미활성화 (GCP 수동 설정 필요) |
 | OAuth 동의화면 프로덕션 전환 | 🔄 | 현재 테스트 모드 (100명 제한) |
 | 법적 컴플라이언스 전체 플로우 | 🔄 | 로그인 → 동의 화면 → 음성 동의 → 설정/철회 |
 | 토스페이먼츠 테스트 키 연동 | 🔄 | 사업자 등록 → 토스 가입 → 테스트 키 발급 → 실결제 테스트 |
@@ -269,6 +293,7 @@ pm2 delete voiceroom && pm2 start ecosystem.config.js && pm2 save
 | `goldenrabbit.biz/proptalk/terms` | **이용약관** |
 | `goldenrabbit.biz/proptalk/privacy` | **개인정보 처리방침** |
 | `goldenrabbit.biz/proptalk/payment-terms` | **결제/환불 약관** |
+| `goldenrabbit.biz/proptalk/delete-account` | **계정 삭제 요청** |
 | `goldenrabbit.biz/proptalk/billing/` | 요금제 선택 |
 | `goldenrabbit.biz/proptalk/billing/checkout` | 토스 SDK 결제창 |
 | `goldenrabbit.biz/proptalk/billing/success` | 결제 성공 |
@@ -378,9 +403,9 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - Google 로그인 + Drive 권한 동의
 - **서비스 동의 화면** (약관/개인정보/국외이전 필수 동의)
 - 채팅방 생성/참여 (방 생성 시 Drive 폴더 자동 생성)
-- 음성 파일 업로드 (MANAGE_EXTERNAL_STORAGE 권한)
+- 음성 파일 업로드 (SAF 파일 선택기)
 - **음성 데이터 처리 동의** (첫 업로드 시 팝업)
-- 3초 폴링으로 실시간 메시지 + 댓글 변경 감지
+- WebSocket 실시간 메시지 (폴링 제거, 재연결 동기화)
 - 마크다운 요약 렌더링 (flutter_markdown)
 - 다운로드 (서버 로컬 → Drive 프록시 fallback)
 - **설정 화면** (법적 문서, 동의 관리, 계정 삭제, **다크모드 토글**)
@@ -389,7 +414,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 ### 주요 패키지
 - `google_sign_in` - OAuth + drive.file 스코프
 - `flutter_markdown` - 요약 마크다운 렌더링
-- `permission_handler` - MANAGE_EXTERNAL_STORAGE
+- `permission_handler` - RECORD_AUDIO
 - `record` - 녹음
 - `socket_io_client` - WebSocket
 - `url_launcher` - 법적 문서 외부 링크
@@ -414,6 +439,9 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `2026-03-03` - 디자인 시스템 구축 + UI 모던화 Phase 1-6 (테마/폰트/다크모드/애니메이션/SafeArea)
 - `2026-03-04` - 결제 시스템 구현 (토스페이먼츠 웹결제, DB+API+웹+Flutter+크론+법적문서)
 - `2026-03-05` - 랜딩페이지 생성 + 회사명 변경 (프롭넷) + 법적문서 라우트 + nginx 정리
+- `2026-03-07` - 서버 확장성 개선 (Drive 복구 + Sheets + 폴링 제거 + ThreadPool + DB풀)
+- `2026-03-07` - UI 수정 (이모지 아이콘, 중복 메시지, 원본 파일명, 라벨 제거)
+- `2026-03-07` - Google Play Console 출시 준비 (릴리스 서명, 스토어 등록, 계정 삭제 페이지)
 
 ---
 
@@ -474,9 +502,19 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - [x] n8n 관련 아티팩트 완전 제거 (goldenrabbit.us SSL 인증서 삭제)
 - [x] 서버 배포 (SCP + PM2 재시작 + nginx reload)
 
-### 우선순위 5: 앱 출시 준비
+### 우선순위 5: 앱 출시 준비 🔄 진행 중 (2026-03-07)
+- [x] 릴리스 키 서명 (proptalk-release.jks)
+- [x] AAB 빌드 (버전 1.0.0+3)
+- [x] Google Play Console 등록 (비공개 테스트)
+- [x] 스토어 등록정보 작성 (설명, 스크린샷)
+- [x] 개인정보처리방침/계정삭제 URL 등록
+- [x] 데이터 안전 섹션 작성
+- [x] 민감한 권한 선언 (RECORD_AUDIO, AD_ID)
+- [x] MANAGE_EXTERNAL_STORAGE 제거
+- [x] 태블릿 스크린샷 생성 (7인치/10인치)
+- [ ] 콘텐츠 등급 설문 완료
+- [ ] 비공개 테스트 출시 완료
 - [ ] 에러 핸들링 강화
-- [ ] Google Play Console 등록
 
 ### 우선순위 6: 개선
 - [x] FAB 라벨 추가 ("참여", "새 톡방")
@@ -531,7 +569,8 @@ Proptalk/
 │   ├── index.html              # 랜딩페이지 (Coming Soon)
 │   ├── terms-of-service.html   # 이용약관
 │   ├── privacy-policy.html     # 개인정보 처리방침
-│   └── billing-terms.html      # 결제/환불 약관
+│   ├── billing-terms.html      # 결제/환불 약관
+│   └── delete-account.html     # 계정 삭제 요청 페이지
 │
 ├── flutter/                    # Flutter 앱
 │   ├── lib/
@@ -602,9 +641,9 @@ Proptalk/
 - **원인**: socketio.emit에서 Python datetime 객체 직렬화 실패
 - **해결**: `_serialize_msg()` 헬퍼 함수 추가 (ISO 문자열 변환)
 
-### 9. 파일 접근 권한 (2026-03-02)
-- **원인**: MANAGE_EXTERNAL_STORAGE 권한 누락
-- **해결**: AndroidManifest.xml에 권한 추가, 권한 요청 UI 개선
+### 9. 파일 접근 권한 (2026-03-02 → 2026-03-07 수정)
+- **원인**: MANAGE_EXTERNAL_STORAGE 권한 사용
+- **해결**: file_picker가 SAF를 사용하므로 MANAGE_EXTERNAL_STORAGE 제거, Google Play 정책 준수
 
 ### 10. PM2 환경변수 캐시 문제 (2026-03-02)
 - **원인**: `pm2 restart --update-env`가 환경변수를 갱신하지 않음

@@ -6,6 +6,8 @@ import '../services/auth_service.dart';
 import '../theme/app_colors.dart';
 import 'chat_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/ad_banner_widget.dart';
+import '../widgets/propnet_footer.dart';
 
 class RoomsScreen extends StatefulWidget {
   const RoomsScreen({super.key});
@@ -377,51 +379,54 @@ class _RoomsScreenState extends State<RoomsScreen> {
             ),
         ],
       ),
-      body: _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : _rooms.isEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-                        shape: BoxShape.circle,
+      body: Column(
+        children: [
+          Expanded(
+            child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _rooms.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.chat_bubble_outline, size: 48,
+                                color: theme.colorScheme.primary.withValues(alpha: 0.6)),
+                          ),
+                          const SizedBox(height: 24),
+                          Text('아직 채팅방이 없어요',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              )),
+                          const SizedBox(height: 8),
+                          Text('새 채팅방을 만들거나\n초대코드로 참여해 보세요',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.outline,
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          FilledButton.icon(
+                            onPressed: () => _showActionSheet(),
+                            icon: const Icon(Icons.add),
+                            label: const Text('시작하기'),
+                          ),
+                        ],
                       ),
-                      child: Icon(Icons.chat_bubble_outline, size: 48,
-                          color: theme.colorScheme.primary.withValues(alpha: 0.6)),
                     ),
-                    const SizedBox(height: 24),
-                    Text('아직 채팅방이 없어요',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        )),
-                    const SizedBox(height: 8),
-                    Text('새 채팅방을 만들거나\n초대코드로 참여해 보세요',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.outline,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: () => _showActionSheet(),
-                      icon: const Icon(Icons.add),
-                      label: const Text('시작하기'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _loadRooms,
-              child: ListView.builder(
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadRooms,
+                    child: ListView.builder(
                 padding: EdgeInsets.only(
                   top: 8,
                   bottom: MediaQuery.of(context).padding.bottom + 8,
@@ -528,8 +533,19 @@ class _RoomsScreenState extends State<RoomsScreen> {
                     ),
                   );
                 },
-              ),
+                    ),
+                  ),
+          ),
+          const AdBannerWidget(),
+          Padding(
+            padding: EdgeInsets.only(
+              top: 8,
+              bottom: 8 + MediaQuery.of(context).padding.bottom,
             ),
+            child: const PropnetFooter(),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showActionSheet(),
         child: const Icon(Icons.add),
