@@ -222,6 +222,9 @@ class Message:
             return query_all(
                 """SELECT m.*, u.name as user_name, u.avatar_url as user_avatar,
                           af.id as audio_id, af.drive_url, af.drive_file_id, af.status as audio_status,
+                          fa.id as file_id, fa.original_filename as file_name,
+                          fa.file_size as file_size, fa.file_type as file_type,
+                          fa.drive_url as file_drive_url, fa.status as file_status,
                           (SELECT json_agg(json_build_object(
                               'id', r.id, 'type', r.type, 'content', r.content,
                               'user_name', ru.name, 'created_at', r.created_at
@@ -231,6 +234,7 @@ class Message:
                    FROM messages m
                    JOIN users u ON m.user_id = u.id
                    LEFT JOIN audio_files af ON af.message_id = m.id
+                   LEFT JOIN file_attachments fa ON fa.message_id = m.id
                    WHERE m.room_id = %s AND m.id < %s AND m.parent_id IS NULL
                    ORDER BY m.created_at DESC
                    LIMIT %s""",
@@ -239,6 +243,9 @@ class Message:
         return query_all(
             """SELECT m.*, u.name as user_name, u.avatar_url as user_avatar,
                       af.id as audio_id, af.drive_url, af.drive_file_id, af.status as audio_status,
+                      fa.id as file_id, fa.original_filename as file_name,
+                      fa.file_size as file_size, fa.file_type as file_type,
+                      fa.drive_url as file_drive_url, fa.status as file_status,
                       (SELECT json_agg(json_build_object(
                           'id', r.id, 'type', r.type, 'content', r.content,
                           'user_name', ru.name, 'created_at', r.created_at
@@ -248,6 +255,7 @@ class Message:
                FROM messages m
                JOIN users u ON m.user_id = u.id
                LEFT JOIN audio_files af ON af.message_id = m.id
+               LEFT JOIN file_attachments fa ON fa.message_id = m.id
                WHERE m.room_id = %s AND m.parent_id IS NULL
                ORDER BY m.created_at DESC
                LIMIT %s""",
@@ -362,6 +370,13 @@ class AudioFile:
         )
     
     @staticmethod
+    def update_duration(audio_id, duration_seconds):
+        return execute(
+            "UPDATE audio_files SET duration_seconds = %s WHERE id = %s RETURNING *",
+            (duration_seconds, audio_id)
+        )
+
+    @staticmethod
     def search(room_id=None, phone_number=None, date_from=None, date_to=None):
         """음성 파일 검색 (전화번호, 날짜 범위)"""
         conditions = []
@@ -391,3 +406,42 @@ class AudioFile:
                 LIMIT 100""",
             tuple(params)
         )
+
+
+# ============================================================
+# FileAttachment 모델
+# ============================================================
+class FileAttachment:
+    @staticmethod
+    def create(message_id, room_id, user_id, original_filename, file_size, file_type, mime_type=None):
+        return execute(
+            """INSERT INTO file_attachments
+               (message_id, room_id, user_id, original_filename, file_size, file_type, mime_type, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'uploading') RETURNING *""",
+            (message_id, room_id, user_id, original_filename, file_size, file_type, mime_type)
+        )
+
+    @staticmethod
+    def update_drive(attachment_id, drive_file_id, drive_url):
+        return execute(
+            """UPDATE file_attachments
+               SET drive_file_id = %s, drive_url = %s, status = 'completed', completed_at = NOW()
+               WHERE id = %s RETURNING *""",
+            (drive_file_id, drive_url, attachment_id)
+        )
+
+    @staticmethod
+    def update_status(attachment_id, status, error_message=None):
+        return execute(
+            """UPDATE file_attachments SET status = %s, error_message = %s
+               WHERE id = %s RETURNING *""",
+            (status, error_message, attachment_id)
+        )
+
+    @staticmethod
+    def find_by_id(attachment_id):
+        return query_one("SELECT * FROM file_attachments WHERE id = %s", (attachment_id,))
+
+    @staticmethod
+    def find_by_message_id(message_id):
+        return query_one("SELECT * FROM file_attachments WHERE message_id = %s", (message_id,))

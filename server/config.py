@@ -71,6 +71,12 @@ class Config:
     )
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
     ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac', 'webm', 'mp4', 'aac'}
+    ALLOWED_FILE_EXTENSIONS = {
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        'txt', 'csv', 'json', 'zip',
+    }
+    MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 
     # 파일 보관 시간 (시간 단위) - 이후 자동 삭제
     AUDIO_RETENTION_HOURS = int(os.environ.get('AUDIO_RETENTION_HOURS', '24'))

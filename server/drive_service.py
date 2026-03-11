@@ -127,17 +127,27 @@ def upload_to_drive(user_tokens, file_path, room_name, room_folder_id=None, uplo
         # MIME 타입 결정
         ext = os.path.splitext(file_path)[1].lower()
         mime_types = {
-            '.mp3': 'audio/mpeg',
-            '.wav': 'audio/wav',
-            '.m4a': 'audio/mp4',
-            '.ogg': 'audio/ogg',
-            '.flac': 'audio/flac',
-            '.webm': 'audio/webm',
-            '.aac': 'audio/aac',
-            '.amr': 'audio/amr',
-            '.3gp': 'audio/3gpp',
+            # Audio
+            '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4',
+            '.ogg': 'audio/ogg', '.flac': 'audio/flac', '.webm': 'audio/webm',
+            '.aac': 'audio/aac', '.amr': 'audio/amr', '.3gp': 'audio/3gpp',
+            # Image
+            '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+            '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+            # Document
+            '.pdf': 'application/pdf',
+            '.doc': 'application/msword',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.xls': 'application/vnd.ms-excel',
+            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            '.ppt': 'application/vnd.ms-powerpoint',
+            '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            # Text
+            '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json',
+            # Archive
+            '.zip': 'application/zip',
         }
-        mime_type = mime_types.get(ext, 'audio/mpeg')
+        mime_type = mime_types.get(ext, 'application/octet-stream')
 
         media = MediaFileUpload(file_path, mimetype=mime_type, resumable=True)
 

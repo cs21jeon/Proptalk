@@ -10,12 +10,14 @@ class SocketService {
   // 이벤트 스트림
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _audioStatusController = StreamController<Map<String, dynamic>>.broadcast();
+  final _fileStatusController = StreamController<Map<String, dynamic>>.broadcast();
   final _typingController = StreamController<Map<String, dynamic>>.broadcast();
   final _userJoinedController = StreamController<Map<String, dynamic>>.broadcast();
   final _reconnectController = StreamController<void>.broadcast();
 
   Stream<Map<String, dynamic>> get onMessage => _messageController.stream;
   Stream<Map<String, dynamic>> get onAudioStatus => _audioStatusController.stream;
+  Stream<Map<String, dynamic>> get onFileStatus => _fileStatusController.stream;
   Stream<Map<String, dynamic>> get onTyping => _typingController.stream;
   Stream<Map<String, dynamic>> get onUserJoined => _userJoinedController.stream;
   Stream<void> get onReconnect => _reconnectController.stream;
@@ -67,6 +69,11 @@ class SocketService {
       _audioStatusController.add(Map<String, dynamic>.from(data));
     });
     
+    // 파일 업로드 상태 변경
+    _socket!.on('file_status', (data) {
+      _fileStatusController.add(Map<String, dynamic>.from(data));
+    });
+
     // 타이핑 표시
     _socket!.on('user_typing', (data) {
       _typingController.add(Map<String, dynamic>.from(data));
@@ -111,6 +118,7 @@ class SocketService {
     disconnect();
     _messageController.close();
     _audioStatusController.close();
+    _fileStatusController.close();
     _typingController.close();
     _userJoinedController.close();
     _reconnectController.close();

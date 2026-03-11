@@ -187,6 +187,22 @@ class ApiService {
     return _handleResponse(response);
   }
   
+  /// 일반 파일 업로드
+  Future<Map<String, dynamic>> uploadFile(int roomId, File file) async {
+    final uri = Uri.parse('$baseUrl/api/rooms/$roomId/files');
+    final request = http.MultipartRequest('POST', uri);
+
+    request.headers['Authorization'] = 'Bearer $_token';
+    request.files.add(
+      await http.MultipartFile.fromPath('file', file.path,
+        filename: path.basename(file.path)),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    return _handleResponse(response);
+  }
+
   /// 음성 파일 검색
   Future<List<dynamic>> searchAudio(int roomId, {
     String? phone, String? dateFrom, String? dateTo,

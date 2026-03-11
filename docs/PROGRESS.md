@@ -1,6 +1,6 @@
 # Proptalk 프로젝트 진행 현황
 
-> 최종 업데이트: 2026-03-08 (긴급 버그 수정 4건 + Whisper API 전환 + Drive 업로드 복구)
+> 최종 업데이트: 2026-03-11 (채팅 링크 감지 + 일반 파일 업로드 → Drive 공유)
 
 ## 프로젝트 개요
 
@@ -55,6 +55,17 @@
 45. **계정 삭제 요청 페이지** (/proptalk/delete-account 웹페이지 + API) ✅ **신규**
 46. **MANAGE_EXTERNAL_STORAGE 권한 제거** (file_picker SAF 사용으로 불필요) ✅ **신규**
 47. **광고 ID 권한 추가** (AD_ID permission for AdMob) ✅ **신규**
+48. **Drive 업로드 invalid_scope 수정** (spreadsheets 스코프 분리, 토큰 갱신 정상화) ✅ **신규**
+49. **Sheets 로깅 연동** (routes_messages.py에서 sheets_service 호출 추가, 스코프 독립 분리) ✅ **신규**
+50. **메시지 API drive_url 포함** (list_for_room LEFT JOIN audio_files, Drive에서 열기 버튼 표시) ✅ **신규**
+51. **drive_status 추적 수정** (update_drive()에 drive_status='completed' 추가, 기존 10건 수정) ✅ **신규**
+52. **OAuth 프로덕션 전환** (테스트 모드 → 프로덕션, refresh_token 7일 만료 문제 해결) ✅ **신규**
+53. **GCP Sheets API 활성화** + OAuth 동의화면 spreadsheets 스코프 추가 ✅ **신규**
+54. **Flutter spreadsheets 스코프 추가** (auth_service.dart) ✅ **신규**
+55. **릴리스 키 SHA-1 등록** (Proptalk_Android_release GCP 클라이언트 추가) ✅ **신규**
+56. **.gitignore 보안 강화** (key.properties, *.jks, photothumb.db 추가) ✅ **신규**
+57. **채팅 링크 자동 감지** (Text.rich + 정규식 URL 감지, 파란색 밑줄 + 탭하면 외부 브라우저) ✅ **신규**
+58. **일반 파일 업로드 → Drive 공유** (이미지/문서/PDF 등 → Drive 업로드 → 링크 공유, file_attachments 테이블, 실시간 WebSocket 상태) ✅ **신규**
 
 ---
 
@@ -162,6 +173,22 @@
 4. **서버 레포 커밋 전 `git status` 확인** — 민감 파일 포함 여부 사전 검토
 5. **PM2 환경변수 변경 시** `pm2 delete → pm2 start` 방식 사용 (`pm2 restart --update-env` 캐시 문제)
 
+### Drive 업로드 복구 + Sheets 연동 + OAuth 프로덕션 전환 (2026-03-11) ✅
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| Drive `invalid_scope` 수정 | ✅ | `_get_valid_credentials()`에서 `spreadsheets` 스코프 제거 → `drive.file`만 사용. 토큰 갱신 시 scope 불일치로 실패하던 문제 해결 |
+| Sheets 스코프 분리 | ✅ | `sheets_service.py`에 전용 `_get_sheets_credentials()` 함수 분리 (Drive/Sheets 독립) |
+| Sheets 로깅 연동 | ✅ | `routes_messages.py`에 7단계 Sheets `append_record()` 호출 추가 (Drive 성공 시에만, 실패해도 Drive 영향 없음) |
+| `drive_status` 추적 수정 | ✅ | `update_drive()`에 `drive_status='completed'` 추가. 기존 10건 DB 수동 수정 |
+| 메시지 API `drive_url` 포함 | ✅ | `Message.list_for_room()`에 `LEFT JOIN audio_files` 추가 → Flutter에서 "Drive에서 열기" 버튼 표시 |
+| GCP Sheets API 활성화 | ✅ | GCP Console에서 Google Sheets API 수동 활성화 |
+| OAuth 동의화면 스코프 추가 | ✅ | `spreadsheets` 스코프를 데이터 액세스에 추가 |
+| OAuth 프로덕션 전환 | ✅ | 테스트 모드 → 프로덕션 (refresh_token 7일 만료 → 영구) |
+| Flutter `spreadsheets` 스코프 | ✅ | `auth_service.dart`에 `spreadsheets` 스코프 추가 |
+| 릴리스 키 SHA-1 등록 | ✅ | `Proptalk_Android_release` GCP 클라이언트 추가 (`89:00:25:...58:E4`) |
+| `.gitignore` 보안 강화 | ✅ | `key.properties`, `*.jks`, `photothumb.db` 추가 |
+
 ### 긴급 버그 수정 + Whisper API 전환 + Drive 복구 (2026-03-08) ✅
 
 | 항목 | 상태 | 비고 |
@@ -212,15 +239,15 @@
 | 건강 선언 | ✅ | "건강 관련 아님" |
 | 콘텐츠 등급 | 🔄 | 설문 작성 필요 |
 | 비공개 테스트 트랙 출시 | 🔄 | 버전 코드 1 제거 후 재출시 필요 |
-| Google Sheets API 활성화 | ❌ | GCP Console에서 수동 활성화 필요 |
+| Google Sheets API 활성화 | ✅ | GCP Console에서 활성화 완료 (2026-03-11) |
 
 ### 테스트 진행 중 🔄
 
 | 항목 | 상태 | 비고 |
 |------|------|--------|
 | Google Drive 전체 플로우 | ✅ | Drive 업로드 정상 동작 확인 |
-| Google Sheets 로깅 | ❌ | Sheets API 미활성화 (GCP 수동 설정 필요) |
-| OAuth 동의화면 프로덕션 전환 | 🔄 | 현재 테스트 모드 (100명 제한) |
+| Google Sheets 로깅 | 🔄 | API 활성화 완료, 재로그인 후 스코프 동의 필요 |
+| OAuth 동의화면 프로덕션 전환 | ✅ | 프로덕션 전환 완료 (2026-03-11) |
 | 법적 컴플라이언스 전체 플로우 | 🔄 | 로그인 → 동의 화면 → 음성 동의 → 설정/철회 |
 | 토스페이먼츠 테스트 키 연동 | 🔄 | 사업자 등록 → 토스 가입 → 테스트 키 발급 → 실결제 테스트 |
 | Flutter 결제 UI 테스트 | 🔄 | 앱 빌드 → 설정화면 결제 섹션 → 잔액 부족 다이얼로그 |
@@ -488,6 +515,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `2026-03-07` - Google Play Console 출시 준비 (릴리스 서명, 스토어 등록, 계정 삭제 페이지)
 - `2026-03-08` - 긴급 버그 수정 4건 (업로드/삭제/이름변경/다운로드) + Whisper API 전환 + Drive 업로드 복구
 - `2026-03-08` - **보안: API 키 유출 사고 대응** (GitGuardian 6건 감지 → 히스토리 정리 + 키 전부 재발급 + .gitignore 보강)
+- `2026-03-11` - **Drive 업로드 복구** (invalid_scope 수정 + Sheets 로깅 연동 + OAuth 프로덕션 전환 + 릴리스 키 등록)
 
 ---
 
@@ -724,6 +752,21 @@ Proptalk/
 - **원인**: `auth.py`에 `server_auth_code` → Drive 토큰 교환 로직 누락. Flutter가 serverAuthCode를 보내도 서버가 무시
 - **증상**: DB의 google_tokens가 오래된 토큰 → Drive API 호출 시 `invalid_scope: Bad Request`
 - **해결**: `auth.py`에 `exchange_auth_code()` 함수 + `google_login()`에 토큰 교환 로직 추가
+
+### 17. Drive 토큰 갱신 시 `invalid_scope` 재발 (2026-03-11)
+- **원인**: `drive_service.py`의 `_get_valid_credentials()`에서 스코프를 `['drive.file', 'spreadsheets']`로 설정. 사용자 OAuth 토큰은 `drive.file`만으로 발급됨. access_token 만료 후 refresh 시 Google이 `spreadsheets` 스코프를 거부
+- **증상**: access_token 유효할 때는 Drive 업로드 성공, 만료 후에는 전부 실패. retry 크론도 계속 실패
+- **해결**: (1) `drive_service.py`에서 `spreadsheets` 스코프 제거 (Drive에는 불필요) (2) `sheets_service.py`에 전용 `_get_sheets_credentials()` 함수 분리 (3) `models.py`의 `update_drive()`에 `drive_status='completed'` 추가
+
+### 18. 릴리스 모드 Google 로그인 실패 (2026-03-11)
+- **원인**: GCP에 디버그 SHA-1(`FA:53:98:...D0:98`)만 등록, 릴리스 SHA-1(`89:00:25:...58:E4`) 미등록
+- **증상**: 디버그 빌드에서는 로그인 성공, 릴리스 빌드에서는 실패
+- **해결**: GCP Console에서 `Proptalk_Android_release` Android 클라이언트 추가 (릴리스 SHA-1 등록)
+
+### 19. OAuth 테스트 모드 refresh_token 7일 만료 (2026-03-11)
+- **원인**: OAuth 동의 화면이 테스트 모드일 때 refresh_token이 7일 후 만료됨
+- **증상**: 7일 후 Drive 업로드 실패 (토큰 갱신 불가)
+- **해결**: GCP Console에서 OAuth 동의 화면 프로덕션으로 전환 (앱 게시)
 
 ---
 

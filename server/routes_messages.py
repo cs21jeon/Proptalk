@@ -12,7 +12,7 @@ from datetime import datetime, date
 from flask import request, jsonify, g, send_file
 from werkzeug.utils import secure_filename
 from auth import login_required
-from models import Room, Message, AudioFile
+from models import Room, Message, AudioFile, FileAttachment
 from config import Config
 
 
@@ -192,6 +192,196 @@ def register_message_routes(app, socketio):
         }), 201
     
     
+    # ============================================================
+    # 일반 파일 업로드 → Google Drive → 링크 공유
+    # ============================================================
+    def _allowed_file_upload(filename):
+        if '.' not in filename:
+            return False
+        ext = filename.rsplit('.', 1)[1].lower()
+        return ext in Config.ALLOWED_FILE_EXTENSIONS
+
+    def _get_file_type(filename):
+        ext = filename.rsplit('.', 1)[1].lower()
+        if ext in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'):
+            return 'image'
+        elif ext in ('pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'):
+            return 'document'
+        elif ext in ('txt', 'csv', 'json'):
+            return 'text'
+        elif ext == 'zip':
+            return 'archive'
+        return 'other'
+
+    def _get_file_icon(file_type):
+        icons = {
+            'image': '\U0001f5bc\ufe0f',
+            'document': '\U0001f4c4',
+            'text': '\U0001f4dd',
+            'archive': '\U0001f4e6',
+        }
+        return icons.get(file_type, '\U0001f4ce')
+
+    def _format_file_size(size_bytes):
+        if size_bytes < 1024:
+            return f"{size_bytes}B"
+        elif size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f}KB"
+        else:
+            return f"{size_bytes / (1024 * 1024):.1f}MB"
+
+    @app.route('/api/rooms/<int:room_id>/files', methods=['POST'])
+    @login_required
+    def upload_file(room_id):
+        """일반 파일 업로드 → Drive 저장 → 링크 공유"""
+        if not Room.is_member(room_id, g.user_id):
+            return jsonify({'error': '접근 권한이 없습니다'}), 403
+
+        if 'file' not in request.files:
+            return jsonify({'error': '파일이 없습니다'}), 400
+
+        file = request.files['file']
+        if not file.filename or not _allowed_file_upload(file.filename):
+            return jsonify({'error': '허용되지 않는 파일 형식입니다'}), 400
+
+        original_filename = file.filename
+        file_type = _get_file_type(original_filename)
+        icon = _get_file_icon(file_type)
+
+        # 1) 임시 저장
+        file_uuid = str(uuid.uuid4())
+        ext = original_filename.rsplit('.', 1)[1].lower()
+        saved_filename = f"{file_uuid}.{ext}"
+        filepath = os.path.join(Config.UPLOAD_FOLDER, saved_filename)
+        os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+        file.save(filepath)
+        file_size = os.path.getsize(filepath)
+
+        if file_size > Config.MAX_FILE_SIZE:
+            os.remove(filepath)
+            return jsonify({'error': f'파일 크기 제한 초과 ({_format_file_size(Config.MAX_FILE_SIZE)})'}), 400
+
+        # 2) 메시지 생성
+        size_str = _format_file_size(file_size)
+        msg = Message.create(
+            room_id, g.user_id, 'file',
+            f'{icon} {original_filename} ({size_str})'
+        )
+
+        # 3) file_attachments 레코드 생성
+        mime_type = file.content_type
+        attachment = FileAttachment.create(
+            msg['id'], room_id, g.user_id,
+            original_filename, file_size, file_type, mime_type
+        )
+
+        # 4) WebSocket 전송
+        socketio.emit('new_message', {
+            'message': _serialize({
+                **msg,
+                'user_name': g.user['name'],
+                'user_avatar': g.user.get('avatar_url'),
+                'file_id': attachment['id'],
+                'file_name': original_filename,
+                'file_size': file_size,
+                'file_type': file_type,
+                'file_drive_url': None,
+                'file_status': 'uploading',
+            })
+        }, room=f'room_{room_id}')
+
+        # 5) 백그라운드 Drive 업로드
+        room = Room.find_by_id(room_id)
+        room_drive_enabled = room.get('enable_drive_backup', True)
+        owner_tokens = None
+        room_drive_folder_id = room.get('drive_folder_id')
+        room_name = room.get('name', 'Unknown')
+
+        if Config.ENABLE_GOOGLE_DRIVE_BACKUP and room_drive_enabled:
+            from models import User
+            owner = User.find_by_id(room['created_by'])
+            if owner and owner.get('google_tokens'):
+                owner_tokens = owner['google_tokens']
+
+        thread = threading.Thread(
+            target=_process_file_upload,
+            args=(app, socketio, filepath, attachment['id'], msg['id'],
+                  room_id, g.user_id, original_filename,
+                  owner_tokens, room_name, room_drive_folder_id)
+        )
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({
+            'message': msg,
+            'attachment': attachment,
+        }), 201
+
+
+    def _process_file_upload(app, socketio, filepath, attachment_id, message_id,
+                             room_id, user_id, original_filename,
+                             owner_tokens, room_name, room_folder_id):
+        """백그라운드: 파일 → Drive 업로드 → 링크 공유"""
+        with app.app_context():
+            try:
+                drive_url = None
+
+                if owner_tokens:
+                    from drive_service import upload_to_drive
+                    from models import User
+
+                    result = upload_to_drive(
+                        owner_tokens, filepath, room_name,
+                        room_folder_id=room_folder_id,
+                        upload_filename=original_filename
+                    )
+
+                    drive_url = result.get('web_link')
+                    FileAttachment.update_drive(
+                        attachment_id, result['file_id'], drive_url
+                    )
+
+                    # 토큰 갱신 시 저장
+                    if result.get('updated_tokens'):
+                        room = Room.find_by_id(room_id)
+                        User.update_google_tokens(room['created_by'], result['updated_tokens'])
+
+                    # 폴더 ID 캐시
+                    if result.get('folder_id') and not room_folder_id:
+                        from models import execute
+                        execute("UPDATE rooms SET drive_folder_id = %s WHERE id = %s",
+                                (result['folder_id'], room_id))
+
+                    logger.info(f"[File] Drive 업로드 완료: {original_filename}")
+                else:
+                    FileAttachment.update_status(attachment_id, 'completed')
+                    logger.info(f"[File] Drive 미설정, 로컬 저장만: {original_filename}")
+
+                # WebSocket으로 완료 알림
+                socketio.emit('file_status', {
+                    'message_id': message_id,
+                    'attachment_id': attachment_id,
+                    'status': 'completed',
+                    'drive_url': drive_url,
+                }, room=f'room_{room_id}')
+
+            except Exception as e:
+                logger.error(f"[File] 업로드 실패: {e}")
+                FileAttachment.update_status(attachment_id, 'failed', str(e)[:200])
+
+                socketio.emit('file_status', {
+                    'message_id': message_id,
+                    'attachment_id': attachment_id,
+                    'status': 'failed',
+                    'error': str(e)[:100],
+                }, room=f'room_{room_id}')
+            finally:
+                # 임시 파일 삭제
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                    logger.info(f"[File] 임시 파일 삭제: {filepath}")
+
+
     # ============================================================
     # 메시지 검색 (내용 + 파일명 + 변환 텍스트)
     # ============================================================

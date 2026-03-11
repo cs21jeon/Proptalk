@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/gestures.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/billing_service.dart';
@@ -36,6 +37,49 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final AudioRecorder _recorder = AudioRecorder();
 
+  static IconData _getFileIcon(dynamic fileType) {
+    switch (fileType) {
+      case 'image': return Icons.image;
+      case 'document': return Icons.description;
+      case 'text': return Icons.article;
+      case 'archive': return Icons.folder_zip;
+      default: return Icons.attach_file;
+    }
+  }
+
+  static final _urlRegex = RegExp(
+    r'https?://[^\s<>\"]+',
+    caseSensitive: false,
+  );
+
+  TextSpan _buildLinkedText(String text, TextStyle style, {TextStyle? linkStyle}) {
+    final matches = _urlRegex.allMatches(text).toList();
+    if (matches.isEmpty) {
+      return TextSpan(text: text, style: style);
+    }
+    final spans = <TextSpan>[];
+    var lastEnd = 0;
+    for (final match in matches) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(text: text.substring(lastEnd, match.start), style: style));
+      }
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: linkStyle ?? style.copyWith(color: Colors.blue, decoration: TextDecoration.underline),
+        recognizer: TapGestureRecognizer()..onTap = () async {
+          final uri = Uri.parse(url);
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        },
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastEnd), style: style));
+    }
+    return TextSpan(children: spans);
+  }
+
   List<dynamic> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
@@ -47,6 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   StreamSubscription? _messageSub;
   StreamSubscription? _audioStatusSub;
+  StreamSubscription? _fileStatusSub;
   StreamSubscription? _typingSub;
   StreamSubscription? _reconnectSub;
 
@@ -95,6 +140,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _textController.removeListener(_onTextChanged);
     _messageSub?.cancel();
     _audioStatusSub?.cancel();
+    _fileStatusSub?.cancel();
     _typingSub?.cancel();
     _reconnectSub?.cancel();
     _textController.dispose();
@@ -152,6 +198,22 @@ class _ChatScreenState extends State<ChatScreen> {
             ..._messages[idx],
             'audio_status': data['status'],
             if (data['drive_url'] != null) 'drive_url': data['drive_url'],
+          };
+        }
+      });
+    });
+
+    // 파일 업로드 상태
+    _fileStatusSub = socket.onFileStatus.listen((data) {
+      if (!mounted) return;
+      setState(() {
+        final idx =
+            _messages.indexWhere((m) => m['id'] == data['message_id']);
+        if (idx >= 0) {
+          _messages[idx] = {
+            ..._messages[idx],
+            'file_status': data['status'],
+            if (data['drive_url'] != null) 'file_drive_url': data['drive_url'],
           };
         }
       });
@@ -576,10 +638,50 @@ class _ChatScreenState extends State<ChatScreen> {
                 _toggleRecording();
               },
             ),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(Icons.attach_file, color: Theme.of(context).colorScheme.primary),
+              title: const Text('파일 전송'),
+              subtitle: const Text('사진, 문서, PDF 등 → Drive 저장'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadFile();
+              },
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp',
+          'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+          'txt', 'csv', 'json', 'zip',
+        ],
+      );
+
+      if (result == null || result.files.isEmpty) return;
+      final file = File(result.files.single.path!);
+      final fileName = result.files.single.name;
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$fileName 업로드 중...')),
+      );
+
+      final api = context.read<ApiService>();
+      await api.uploadFile(widget.roomId, file);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('파일 업로드 실패: $e')),
+      );
+    }
   }
 
   // ============================================================
@@ -1046,9 +1148,11 @@ class _ChatScreenState extends State<ChatScreen> {
             color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Text(msg['content'] ?? '',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline)),
+          child: Text.rich(
+              _buildLinkedText(
+                msg['content'] ?? '',
+                theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline) ?? const TextStyle(),
+              )),
         ),
       );
     }
@@ -1202,13 +1306,97 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                     ),
+                ] else if (type == 'file') ...[
+                  // 파일 메시지
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_getFileIcon(msg['file_type']),
+                          size: 18,
+                          color: isMe ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7) : theme.colorScheme.primary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          msg['file_name'] ?? msg['content'] ?? '',
+                          style: TextStyle(
+                            color: isMe ? theme.colorScheme.onPrimaryContainer : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (msg['file_status'] == 'uploading' && (msg['file_drive_url'] == null || (msg['file_drive_url'] as String).isEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 14, height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: isMe ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.7) : theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text('Drive 업로드 중...',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isMe ? theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.6) : theme.colorScheme.outline,
+                              )),
+                        ],
+                      ),
+                    ),
+                  if (msg['file_drive_url'] != null && (msg['file_drive_url'] as String).isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: InkWell(
+                        onTap: () async {
+                          final uri = Uri.parse(msg['file_drive_url']);
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: (isMe ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.primary).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.open_in_new,
+                                  size: 16,
+                                  color: isMe
+                                      ? theme.colorScheme.onPrimaryContainer
+                                      : theme.colorScheme.primary),
+                              const SizedBox(width: 4),
+                              Text('Drive에서 열기',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: isMe
+                                        ? theme.colorScheme.onPrimaryContainer
+                                        : theme.colorScheme.primary,
+                                  )),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ] else ...[
                   // 일반 텍스트 또는 변환 결과
-                  Text(
-                    msg['content'] ?? '',
-                    style: TextStyle(
-                      color: isMe ? theme.colorScheme.onPrimaryContainer : null,
-                      height: 1.4,
+                  Text.rich(
+                    _buildLinkedText(
+                      msg['content'] ?? '',
+                      TextStyle(
+                        color: isMe ? theme.colorScheme.onPrimaryContainer : null,
+                        height: 1.4,
+                      ),
+                      linkStyle: TextStyle(
+                        color: isMe ? Colors.lightBlueAccent : Colors.blue,
+                        decoration: TextDecoration.underline,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ],
@@ -1271,8 +1459,12 @@ class _ChatScreenState extends State<ChatScreen> {
                             shrinkWrap: true,
                           )
                         else
-                          Text(reply['content'] ?? '',
-                              style: const TextStyle(height: 1.4)),
+                          Text.rich(
+                            _buildLinkedText(
+                              reply['content'] ?? '',
+                              const TextStyle(height: 1.4),
+                            ),
+                          ),
                       ],
                     ),
                   )),
