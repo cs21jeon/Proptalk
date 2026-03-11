@@ -10,6 +10,8 @@ flutter/pubspec.lock
 # Android
 flutter/android/.gradle/
 flutter/android/local.properties
+flutter/android/key.properties
+*.jks
 flutter/android/app/debug/
 flutter/android/app/profile/
 flutter/android/app/release/
@@ -37,6 +39,7 @@ server/__pycache__/
 # OS
 .DS_Store
 Thumbs.db
+photothumb.db
 nul
 
 # Credentials (절대 커밋하지 않음)

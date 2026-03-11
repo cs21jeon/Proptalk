@@ -138,6 +138,30 @@
 | **Nginx ^~ /proptalk/ 통합** | ✅ | 별도 /proptalk/billing/ → 단일 ^~ /proptalk/ 블록으로 통합 |
 | **Nginx 미사용 설정 삭제** | ✅ | voiceroom/n8n/building-service config 삭제, goldenrabbit.us SSL 인증서 삭제 |
 
+### API 키 유출 사고 대응 (2026-03-08) ✅
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| **원인 분석** | ✅ | 서버 goldenrabbit 레포에서 `git add -A`로 커밋 시 `ecosystem.config.js`(실제 API 키 포함)가 함께 커밋됨. `.gitignore`에 해당 파일이 등록되지 않았음 |
+| **GitGuardian 감지** | ✅ | 6건 시크릿 유출 감지 (OpenAI Key, Claude Key, Google OAuth Secret, DB 비밀번호, JWT Secret, Billing 암호화 키) |
+| **git 히스토리 정리** | ✅ | `git filter-branch`로 `ecosystem.config.js`, `deploy/patch_ecosystem.py` 히스토리 완전 삭제 + force push |
+| **키 재발급: OpenAI API Key** | ✅ | platform.openai.com에서 새 키 발급 → 서버 적용 |
+| **키 재발급: Claude API Key** | ✅ | console.anthropic.com에서 새 키 발급 → 서버 적용 |
+| **키 재발급: DB 비밀번호** | ✅ | PostgreSQL `ALTER USER` → ecosystem.config.js 반영 |
+| **키 재발급: Google Client Secret** | ✅ | GCP Console에서 새 보안 비밀번호 추가 → 서버 적용 → 기존 키 삭제 필요 |
+| **키 재발급: SECRET_KEY / JWT_SECRET** | ✅ | `secrets.token_hex(32)`로 새 랜덤값 생성 → 적용 (기존 로그인 세션 무효화) |
+| **키 재발급: BILLING_ENCRYPTION_KEY** | ✅ | 새 랜덤값 생성 → 적용 (결제 이력 없어 영향 없음) |
+| **TOSS 키** | ⏭️ | 테스트키(`test_`)라 당장 위험 없음. 라이브 전환 시 변경 |
+| **.gitignore 보강** | ✅ | `ecosystem.config.js`, `**/ecosystem.config.js`, `**/deploy/` 추가 (양쪽 레포) |
+| **git 추적 해제** | ✅ | `git rm --cached` 로 ecosystem.config.js, server/deploy/ 추적 제거 |
+
+#### 재발 방지 규칙
+1. **`git add -A` 또는 `git add .` 사용 금지** — 반드시 `git add <파일명>`으로 특정 파일만 스테이징
+2. **`ecosystem.config.js`는 절대 git에 커밋하지 않음** — `.gitignore`에 등록 완료
+3. **API 키, 비밀번호 등 시크릿은 환경변수로만 관리** — 코드/설정 파일에 하드코딩 금지
+4. **서버 레포 커밋 전 `git status` 확인** — 민감 파일 포함 여부 사전 검토
+5. **PM2 환경변수 변경 시** `pm2 delete → pm2 start` 방식 사용 (`pm2 restart --update-env` 캐시 문제)
+
 ### 긴급 버그 수정 + Whisper API 전환 + Drive 복구 (2026-03-08) ✅
 
 | 항목 | 상태 | 비고 |
@@ -463,6 +487,7 @@ flutter\build\app\outputs\flutter-apk\app-release.apk (51.1MB)
 - `2026-03-07` - UI 수정 (이모지 아이콘, 중복 메시지, 원본 파일명, 라벨 제거)
 - `2026-03-07` - Google Play Console 출시 준비 (릴리스 서명, 스토어 등록, 계정 삭제 페이지)
 - `2026-03-08` - 긴급 버그 수정 4건 (업로드/삭제/이름변경/다운로드) + Whisper API 전환 + Drive 업로드 복구
+- `2026-03-08` - **보안: API 키 유출 사고 대응** (GitGuardian 6건 감지 → 히스토리 정리 + 키 전부 재발급 + .gitignore 보강)
 
 ---
 
@@ -689,7 +714,13 @@ Proptalk/
 - **해결**: `whisper_service.py` (OpenAI Whisper API `whisper-1`) 사용으로 전환. CLAUDE.md에 규칙 명시하여 향후 변경 방지
 - **효과**: 52초 음성 처리 시간 56초 → 4~7초, 정확도 향상
 
-### 15. Google Drive `invalid_scope` (2026-03-08)
+### 15. API 키 유출 사고 (2026-03-08)
+- **원인**: 서버 goldenrabbit 레포에서 `git add -A`로 전체 파일을 스테이징할 때, `.gitignore`에 `ecosystem.config.js`가 등록되지 않아 실제 API 키가 포함된 채 GitHub에 커밋/푸시됨
+- **유출 범위**: OpenAI Key, Claude Key, Google Client Secret, DB 비밀번호, JWT Secret, Billing 암호화 키 (6건)
+- **해결**: (1) `git filter-branch`로 히스토리에서 파일 완전 삭제 + force push (2) 유출된 키 6개 전부 재발급 (3) `.gitignore`에 `ecosystem.config.js`, `**/deploy/` 추가
+- **재발 방지**: `git add -A` 금지, 특정 파일만 `git add <파일명>` 사용, 커밋 전 `git status` 확인 필수
+
+### 16. Google Drive `invalid_scope` (2026-03-08)
 - **원인**: `auth.py`에 `server_auth_code` → Drive 토큰 교환 로직 누락. Flutter가 serverAuthCode를 보내도 서버가 무시
 - **증상**: DB의 google_tokens가 오래된 토큰 → Drive API 호출 시 `invalid_scope: Bad Request`
 - **해결**: `auth.py`에 `exchange_auth_code()` 함수 + `google_login()`에 토큰 교환 로직 추가

@@ -14,6 +14,7 @@ class AuthService extends ChangeNotifier {
       'email',
       'profile',
       'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/spreadsheets',
     ],
     serverClientId: '846392940969-a7k37gkon1p451mlnhp0oj9qaok1d8o1.apps.googleusercontent.com',
   );

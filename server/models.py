@@ -221,6 +221,7 @@ class Message:
         if before_id:
             return query_all(
                 """SELECT m.*, u.name as user_name, u.avatar_url as user_avatar,
+                          af.id as audio_id, af.drive_url, af.drive_file_id, af.status as audio_status,
                           (SELECT json_agg(json_build_object(
                               'id', r.id, 'type', r.type, 'content', r.content,
                               'user_name', ru.name, 'created_at', r.created_at
@@ -229,6 +230,7 @@ class Message:
                           WHERE r.parent_id = m.id) as replies
                    FROM messages m
                    JOIN users u ON m.user_id = u.id
+                   LEFT JOIN audio_files af ON af.message_id = m.id
                    WHERE m.room_id = %s AND m.id < %s AND m.parent_id IS NULL
                    ORDER BY m.created_at DESC
                    LIMIT %s""",
@@ -236,6 +238,7 @@ class Message:
             )
         return query_all(
             """SELECT m.*, u.name as user_name, u.avatar_url as user_avatar,
+                      af.id as audio_id, af.drive_url, af.drive_file_id, af.status as audio_status,
                       (SELECT json_agg(json_build_object(
                           'id', r.id, 'type', r.type, 'content', r.content,
                           'user_name', ru.name, 'created_at', r.created_at
@@ -244,6 +247,7 @@ class Message:
                       WHERE r.parent_id = m.id) as replies
                FROM messages m
                JOIN users u ON m.user_id = u.id
+               LEFT JOIN audio_files af ON af.message_id = m.id
                WHERE m.room_id = %s AND m.parent_id IS NULL
                ORDER BY m.created_at DESC
                LIMIT %s""",
@@ -327,8 +331,8 @@ class AudioFile:
     @staticmethod
     def update_drive(audio_id, drive_file_id, drive_url):
         return execute(
-            """UPDATE audio_files 
-               SET drive_file_id = %s, drive_url = %s
+            """UPDATE audio_files
+               SET drive_file_id = %s, drive_url = %s, drive_status = 'completed'
                WHERE id = %s RETURNING *""",
             (drive_file_id, drive_url, audio_id)
         )

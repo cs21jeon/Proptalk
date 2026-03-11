@@ -473,6 +473,29 @@ def process_audio_background(app, socketio, filepath, audio_id, message_id,
                 'drive_uploaded': drive_uploaded,
             }, room=f'room_{room_id}')
 
+            # --- 7단계: (선택) Google Sheets 로깅 ---
+            if drive_uploaded and room_sheets_enabled and owner_tokens:
+                try:
+                    from sheets_service import append_record
+                    record = {
+                        '날짜': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                        '파일명': original_filename,
+                        '전화번호': parsed.get('phone_number', ''),
+                        '이름': parsed.get('name', ''),
+                        '길이(초)': f'{duration_seconds:.0f}' if duration_seconds > 0 else '',
+                        '업로더': user_name,
+                        '방이름': room_name,
+                        '처리시간': f'{elapsed:.1f}초',
+                        'Drive링크': drive_result.get('web_link', '') if drive_result else '',
+                        '원본텍스트': (transcript_text[:500] if transcript_text else ''),
+                        '요약': (summary_text[:500] if summary_text else ''),
+                    }
+                    folder_id = room_drive_folder_id or (drive_result.get('folder_id') if drive_result else None)
+                    if folder_id:
+                        append_record(owner_tokens, folder_id, room_name, record)
+                except Exception as e:
+                    logger.warning(f'[Sheets] 로깅 실패 (Drive는 정상): {e}')
+
             # Drive 저장 완료 시 서버 파일 삭제
             if drive_uploaded:
                 try:
