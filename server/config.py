@@ -56,6 +56,7 @@ class Config:
     # Whisper STT
     # ============================================================
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+    OPENAI_ADMIN_KEY = os.environ.get('OPENAI_ADMIN_KEY', '')
     WHISPER_MODEL = os.environ.get('WHISPER_MODEL', 'small')
     
     # ============================================================

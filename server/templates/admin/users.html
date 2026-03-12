@@ -1,8 +1,8 @@
 {% extends "admin/base.html" %}
 {% set active = "users" %}
-{% block title %}Users{% endblock %}
+{% block title %}사용자{% endblock %}
 {% block content %}
-<h2 style="font-size:20px;margin-bottom:16px;font-weight:700;">Users ({{ users|length }})</h2>
+<h2 style="font-size:20px;margin-bottom:16px;font-weight:700;">사용자 ({{ users|length }}명)</h2>
 
 <!-- Mobile: Card view -->
 <div class="mobile-only">
@@ -16,16 +16,16 @@
             </div>
             <div>
                 {% if u.subscription_status == 'active' %}
-                    <span class="badge badge-active">Active</span>
+                    <span class="badge badge-active">활성</span>
                 {% elif u.subscription_status == 'expired' %}
-                    <span class="badge badge-expired">Expired</span>
+                    <span class="badge badge-expired">만료</span>
                 {% else %}
-                    <span class="badge badge-free">{{ u.subscription_status or 'Free' }}</span>
+                    <span class="badge badge-free">{{ u.subscription_status or '무료' }}</span>
                 {% endif %}
             </div>
         </div>
         <div class="user-card-meta">
-            <span>{{ u.plan_name or 'Free' }}</span>
+            <span>{{ u.plan_name or '무료' }}</span>
             <span>
                 {% if u.remaining_seconds is not none %}
                     {{ "%.0f"|format((u.remaining_seconds or 0) / 60) }}분 남음
@@ -47,12 +47,12 @@
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Plan</th>
-                <th class="text-right">Remaining</th>
-                <th>Status</th>
-                <th>Joined</th>
+                <th>이름</th>
+                <th>이메일</th>
+                <th>요금제</th>
+                <th class="text-right">잔여시간</th>
+                <th>상태</th>
+                <th>가입일</th>
                 <th></th>
             </tr>
         </thead>
@@ -62,25 +62,25 @@
                 <td>{{ u.id }}</td>
                 <td>{{ u.name }}</td>
                 <td>{{ u.email }}</td>
-                <td>{{ u.plan_name or 'Free' }}</td>
+                <td>{{ u.plan_name or '무료' }}</td>
                 <td class="text-right">
                     {% if u.remaining_seconds is not none %}
-                        {{ "%.1f"|format((u.remaining_seconds or 0) / 60) }} min
+                        {{ "%.1f"|format((u.remaining_seconds or 0) / 60) }}분
                     {% else %}
                         -
                     {% endif %}
                 </td>
                 <td>
                     {% if u.subscription_status == 'active' %}
-                        <span class="badge badge-active">Active</span>
+                        <span class="badge badge-active">활성</span>
                     {% elif u.subscription_status == 'expired' %}
-                        <span class="badge badge-expired">Expired</span>
+                        <span class="badge badge-expired">만료</span>
                     {% else %}
-                        <span class="badge badge-free">{{ u.subscription_status or 'Free' }}</span>
+                        <span class="badge badge-free">{{ u.subscription_status or '무료' }}</span>
                     {% endif %}
                 </td>
                 <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}</td>
-                <td><a href="/proptalk/admin/users/{{ u.id }}" class="btn">Detail</a></td>
+                <td><a href="/proptalk/admin/users/{{ u.id }}" class="btn">상세</a></td>
             </tr>
             {% endfor %}
         </tbody>

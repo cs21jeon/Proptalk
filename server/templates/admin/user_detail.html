@@ -3,7 +3,7 @@
 {% block title %}{{ user.name }}{% endblock %}
 {% block content %}
 <div style="margin-bottom:16px;">
-    <a href="/proptalk/admin/users" style="color:#888;text-decoration:none;font-size:14px;">&larr; Users</a>
+    <a href="/proptalk/admin/users" style="color:#888;text-decoration:none;font-size:14px;">&larr; 사용자 목록</a>
 </div>
 
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
@@ -19,46 +19,46 @@
 <div class="stats-grid">
     <div class="stat-card">
         <div class="value">{{ "%.0f"|format((billing.remaining_seconds or 0) / 60 if billing else 0) }}</div>
-        <div class="label">Remaining (min)</div>
+        <div class="label">잔여시간 (분)</div>
     </div>
     <div class="stat-card">
         <div class="value" style="font-size:20px;">{{ billing.subscription_status or 'free' if billing else 'free' }}</div>
-        <div class="label">Plan Status</div>
+        <div class="label">요금제 상태</div>
     </div>
     <div class="stat-card">
         <div class="value" style="font-size:16px;">{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '-' }}</div>
-        <div class="label">Joined</div>
+        <div class="label">가입일</div>
     </div>
 </div>
 
 <!-- Admin Actions -->
 <div class="card">
-    <h3>Manage</h3>
+    <h3>관리</h3>
     <div class="action-grid">
         <div class="action-item">
-            <label>Add Minutes</label>
+            <label>시간 추가 (분)</label>
             <div class="action-row">
-                <input type="number" id="addMinutes" placeholder="Minutes" min="1">
-                <button onclick="addTime()">Add</button>
+                <input type="number" id="addMinutes" placeholder="분" min="1">
+                <button onclick="addTime()">추가</button>
             </div>
         </div>
         <div class="action-item">
-            <label>Set Seconds</label>
+            <label>잔여시간 설정 (초)</label>
             <div class="action-row">
-                <input type="number" id="setSeconds" placeholder="Seconds" min="0"
+                <input type="number" id="setSeconds" placeholder="초" min="0"
                        value="{{ (billing.remaining_seconds or 0)|int if billing else 0 }}">
-                <button onclick="setSeconds()">Set</button>
+                <button onclick="setSeconds()">설정</button>
             </div>
         </div>
         <div class="action-item">
-            <label>Change Plan</label>
+            <label>요금제 변경</label>
             <div class="action-row">
                 <select id="planCode">
                     {% for p in plans %}
                     <option value="{{ p.code }}">{{ p.name }}</option>
                     {% endfor %}
                 </select>
-                <button onclick="changePlan()">Change</button>
+                <button onclick="changePlan()">변경</button>
             </div>
         </div>
     </div>
@@ -67,12 +67,12 @@
 
 <!-- Payment History -->
 <div class="card">
-    <h3>Payment History</h3>
+    <h3>결제 내역</h3>
     {% if transactions %}
     <div class="table-wrap">
     <table>
         <thead>
-            <tr><th>Date</th><th>Plan</th><th class="text-right">Amount</th><th>Status</th></tr>
+            <tr><th>날짜</th><th>요금제</th><th class="text-right">금액</th><th>상태</th></tr>
         </thead>
         <tbody>
             {% for tx in transactions %}
@@ -87,25 +87,25 @@
     </table>
     </div>
     {% else %}
-    <p style="color:#999;font-size:14px;">No payment history.</p>
+    <p style="color:#999;font-size:14px;">결제 내역이 없습니다.</p>
     {% endif %}
 </div>
 
 <!-- Usage History -->
 <div class="card">
-    <h3>Usage History</h3>
+    <h3>사용 내역</h3>
     {% if usage %}
     <div class="table-wrap">
     <table>
         <thead>
-            <tr><th>Date</th><th>File</th><th class="text-right">Used</th><th class="text-right">Before</th><th class="text-right">After</th></tr>
+            <tr><th>날짜</th><th>파일명</th><th class="text-right">사용량</th><th class="text-right">사용 전</th><th class="text-right">사용 후</th></tr>
         </thead>
         <tbody>
             {% for u in usage %}
             <tr>
                 <td>{{ u.created_at.strftime('%m/%d %H:%M') if u.created_at else '-' }}</td>
                 <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;">{{ u.original_filename or '-' }}</td>
-                <td class="text-right">{{ "%.1f"|format((u.seconds_used or 0) / 60) }}m</td>
+                <td class="text-right">{{ "%.1f"|format((u.seconds_used or 0) / 60) }}분</td>
                 <td class="text-right">{{ "%.1f"|format((u.seconds_before or 0) / 60) }}</td>
                 <td class="text-right">{{ "%.1f"|format((u.seconds_after or 0) / 60) }}</td>
             </tr>
@@ -114,7 +114,7 @@
     </table>
     </div>
     {% else %}
-    <p style="color:#999;font-size:14px;">No usage history.</p>
+    <p style="color:#999;font-size:14px;">사용 내역이 없습니다.</p>
     {% endif %}
 </div>
 
@@ -142,21 +142,21 @@ async function adminAction(body) {
     const data = await res.json();
     if (data.ok) {
         const el = document.getElementById('actionResult');
-        el.textContent = 'Updated successfully.';
+        el.textContent = '변경되었습니다.';
         el.style.display = 'block';
         setTimeout(() => location.reload(), 800);
     } else {
-        alert(data.error || 'Failed');
+        alert(data.error || '실패');
     }
 }
 function addTime() {
     const min = parseInt(document.getElementById('addMinutes').value);
-    if (!min || min <= 0) return alert('Enter valid minutes');
+    if (!min || min <= 0) return alert('올바른 분을 입력하세요');
     adminAction({action: 'add_seconds', seconds: min * 60});
 }
 function setSeconds() {
     const sec = parseInt(document.getElementById('setSeconds').value);
-    if (isNaN(sec) || sec < 0) return alert('Enter valid seconds');
+    if (isNaN(sec) || sec < 0) return alert('올바른 초를 입력하세요');
     adminAction({action: 'set_seconds', seconds: sec});
 }
 function changePlan() {

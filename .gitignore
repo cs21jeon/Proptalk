@@ -29,6 +29,8 @@ server/venv/
 server/__pycache__/
 *.pyc
 *.pyo
+ecosystem.config.js
+.openai_credit.json
 
 # IDE
 .idea/

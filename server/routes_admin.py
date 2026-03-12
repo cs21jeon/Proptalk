@@ -2,9 +2,12 @@
 관리자 대시보드 라우트
 - ADMIN_EMAIL 환경변수와 일치하는 사용자만 접근 가능
 """
+import json
 import logging
+import os
+import time
 import requests as http_requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import request, jsonify, g, render_template, redirect, session
 from auth import login_required, decode_token
@@ -172,3 +175,201 @@ def register_admin_routes(app):
             logger.info(f"[Admin] user={user_id} set_seconds={seconds} by {g.user['email']}")
 
         return jsonify({'ok': True})
+
+    # ── OpenAI Usage Dashboard ──────────────────────────────
+
+    @app.route('/proptalk/admin/openai-usage')
+    @admin_required
+    def admin_openai_usage():
+        return render_template('admin/openai_usage.html')
+
+    @app.route('/proptalk/admin/api/openai-costs')
+    @admin_required
+    def admin_openai_costs():
+        """OpenAI Costs API 프록시"""
+        admin_key = Config.OPENAI_ADMIN_KEY
+        if not admin_key:
+            return jsonify({'error': 'OPENAI_ADMIN_KEY not configured'}), 500
+
+        days = int(request.args.get('days', 30))
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=days)
+        start_ts = int(start.timestamp())
+
+        headers = {
+            'Authorization': f'Bearer {admin_key}',
+            'Content-Type': 'application/json',
+        }
+
+        # Costs API - 일별 비용
+        all_data = []
+        page_cursor = None
+        while True:
+            params = {
+                'start_time': start_ts,
+                'bucket_width': '1d',
+                'limit': 90,
+            }
+            if page_cursor:
+                params['page'] = page_cursor
+            resp = http_requests.get(
+                'https://api.openai.com/v1/organization/costs',
+                headers=headers, params=params, timeout=15
+            )
+            if resp.status_code != 200:
+                logger.error(f"[OpenAI Costs] {resp.status_code}: {resp.text[:300]}")
+                return jsonify({'error': 'OpenAI API error', 'detail': resp.text[:300]}), resp.status_code
+            body = resp.json()
+            all_data.extend(body.get('data', []))
+            page_cursor = body.get('next_page')
+            if not page_cursor:
+                break
+
+        return jsonify({'data': all_data})
+
+    @app.route('/proptalk/admin/api/openai-usage-detail')
+    @admin_required
+    def admin_openai_usage_detail():
+        """OpenAI Usage API 프록시 - 모델별 세부 사용량"""
+        admin_key = Config.OPENAI_ADMIN_KEY
+        if not admin_key:
+            return jsonify({'error': 'OPENAI_ADMIN_KEY not configured'}), 500
+
+        days = int(request.args.get('days', 30))
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=days)
+        start_ts = int(start.timestamp())
+
+        headers = {
+            'Authorization': f'Bearer {admin_key}',
+            'Content-Type': 'application/json',
+        }
+
+        # Audio(Whisper) 사용량
+        all_data = []
+        page_cursor = None
+        while True:
+            params = {
+                'start_time': start_ts,
+                'bucket_width': '1d',
+                'group_by': ['model'],
+                'limit': 90,
+            }
+            if page_cursor:
+                params['page'] = page_cursor
+            resp = http_requests.get(
+                'https://api.openai.com/v1/organization/usage/audio_speeches',
+                headers=headers, params=params, timeout=15
+            )
+            # audio_speeches가 없으면 빈 배열
+            if resp.status_code == 200:
+                body = resp.json()
+                all_data.extend(body.get('data', []))
+                page_cursor = body.get('next_page')
+                if not page_cursor:
+                    break
+            else:
+                break
+
+        # Audio transcriptions (Whisper)
+        whisper_data = []
+        page_cursor = None
+        while True:
+            params = {
+                'start_time': start_ts,
+                'bucket_width': '1d',
+                'group_by': ['model'],
+                'limit': 90,
+            }
+            if page_cursor:
+                params['page'] = page_cursor
+            resp = http_requests.get(
+                'https://api.openai.com/v1/organization/usage/audio_transcriptions',
+                headers=headers, params=params, timeout=15
+            )
+            if resp.status_code == 200:
+                body = resp.json()
+                whisper_data.extend(body.get('data', []))
+                page_cursor = body.get('next_page')
+                if not page_cursor:
+                    break
+            else:
+                logger.warning(f"[OpenAI Usage] audio_transcriptions: {resp.status_code}")
+                break
+
+        return jsonify({
+            'audio_speeches': all_data,
+            'audio_transcriptions': whisper_data,
+        })
+
+    # ── OpenAI 크레딧 잔액 관리 ──────────────────────────────
+
+    CREDIT_FILE = os.path.join(os.path.dirname(__file__), '.openai_credit.json')
+
+    @app.route('/proptalk/admin/api/openai-credit')
+    @admin_required
+    def admin_openai_credit():
+        """충전액 조회 + 전체 누적 사용량으로 잔액 계산"""
+        # 충전액 읽기
+        credit_data = {'total_credit': 10.0}
+        if os.path.exists(CREDIT_FILE):
+            with open(CREDIT_FILE, 'r') as f:
+                credit_data = json.load(f)
+
+        # 전체 누적 비용 조회 (계정 생성 시점부터)
+        admin_key = Config.OPENAI_ADMIN_KEY
+        if not admin_key:
+            return jsonify({
+                'total_credit': credit_data['total_credit'],
+                'total_used': 0,
+                'balance': credit_data['total_credit'],
+            })
+
+        headers = {
+            'Authorization': f'Bearer {admin_key}',
+            'Content-Type': 'application/json',
+        }
+
+        # 충분히 과거부터 조회 (2024-01-01)
+        start_ts = int(datetime(2024, 1, 1, tzinfo=timezone.utc).timestamp())
+        total_used = 0.0
+        page_cursor = None
+        while True:
+            params = {
+                'start_time': start_ts,
+                'bucket_width': '1d',
+                'limit': 180,
+            }
+            if page_cursor:
+                params['page'] = page_cursor
+            resp = http_requests.get(
+                'https://api.openai.com/v1/organization/costs',
+                headers=headers, params=params, timeout=15
+            )
+            if resp.status_code != 200:
+                break
+            body = resp.json()
+            for bucket in body.get('data', []):
+                for r in bucket.get('results', []):
+                    total_used += float(r.get('amount', {}).get('value', 0))
+            page_cursor = body.get('next_page')
+            if not page_cursor:
+                break
+
+        total_credit = credit_data['total_credit']
+        return jsonify({
+            'total_credit': total_credit,
+            'total_used': round(total_used, 4),
+            'balance': round(total_credit - total_used, 4),
+        })
+
+    @app.route('/proptalk/admin/api/openai-credit', methods=['POST'])
+    @admin_required
+    def admin_set_openai_credit():
+        """충전액 설정"""
+        data = request.get_json()
+        total_credit = float(data.get('total_credit', 0))
+        with open(CREDIT_FILE, 'w') as f:
+            json.dump({'total_credit': total_credit}, f)
+        logger.info(f"[Admin] OpenAI credit set to ${total_credit} by {g.user['email']}")
+        return jsonify({'ok': True, 'total_credit': total_credit})

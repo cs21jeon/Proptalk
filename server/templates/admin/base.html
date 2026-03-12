@@ -100,11 +100,12 @@
     <nav class="navbar">
         <span class="brand">Proptalk</span>
         <div class="nav-links">
-            <a href="/proptalk/admin/" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
-            <a href="/proptalk/admin/users" class="{% if active == 'users' %}active{% endif %}">Users</a>
+            <a href="/proptalk/admin/" class="{% if active == 'dashboard' %}active{% endif %}">대시보드</a>
+            <a href="/proptalk/admin/users" class="{% if active == 'users' %}active{% endif %}">사용자</a>
+            <a href="/proptalk/admin/openai-usage" class="{% if active == 'openai' %}active{% endif %}">API 사용량</a>
         </div>
         <div class="nav-right">
-            <a href="/proptalk/admin/logout">Logout</a>
+            <a href="/proptalk/admin/logout">로그아웃</a>
         </div>
     </nav>
     <div class="container">
