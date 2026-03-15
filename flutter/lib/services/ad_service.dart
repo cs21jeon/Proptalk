@@ -8,12 +8,21 @@ class AdService {
 
   bool _initialized = false;
 
-  // 테스트 배너 Ad Unit ID (프로덕션 시 교체)
-  static const String bannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
+  // 배너 Ad Unit ID (proptalk_banner_rooms)
+  static const String bannerAdUnitId = 'ca-app-pub-3478991909223100/4866424920';
 
   Future<void> initialize() async {
     if (_initialized) return;
     await MobileAds.instance.initialize();
+
+    // 테스트 기기 등록 (logcat에서 기기 ID 확인 후 추가)
+    // 테스트 기기에서는 테스트 광고가 표시되어 무효 트래픽 방지
+    MobileAds.instance.updateRequestConfiguration(
+      RequestConfiguration(testDeviceIds: [
+        // 'YOUR_TEST_DEVICE_ID', // logcat에서 확인한 기기 ID 추가
+      ]),
+    );
+
     _initialized = true;
     debugPrint('[AdService] AdMob initialized');
   }

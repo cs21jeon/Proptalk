@@ -1,12 +1,16 @@
 """
 웹 결제 페이지 라우트 (HTML 렌더링)
-앱에서 url_launcher로 열리는 결제 웹페이지
+웹 브라우저에서 Google 로그인 후 결제 진행
 + 랜딩페이지 서빙
 """
 import os
 import logging
-from flask import render_template, request, redirect, send_from_directory
+from flask import render_template, request, redirect, jsonify, send_from_directory
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from config import Config
+from auth import create_token
+from models import User
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +54,40 @@ def register_billing_web_routes(app):
     def proptalk_payment_terms():
         """결제/환불 약관"""
         return send_from_directory(_MARKETING_DIR, 'billing-terms.html')
+
+    # ── 빌링 로그인 ──
+    @app.route('/proptalk/billing/login', methods=['GET', 'POST'])
+    def billing_login():
+        if request.method == 'GET':
+            return render_template(
+                'billing/login.html',
+                google_client_id=Config.GOOGLE_CLIENT_ID,
+            )
+
+        # POST: Google ID 토큰으로 로그인
+        data = request.get_json()
+        google_token = data.get('id_token')
+        if not google_token:
+            return jsonify({'ok': False, 'error': '토큰이 없습니다'}), 400
+
+        try:
+            idinfo = id_token.verify_oauth2_token(
+                google_token,
+                google_requests.Request(),
+                Config.GOOGLE_CLIENT_ID,
+            )
+            google_id = idinfo['sub']
+            email = idinfo.get('email', '')
+            name = idinfo.get('name', '')
+            avatar_url = idinfo.get('picture', '')
+
+            user = User.create(google_id, email, name, avatar_url)
+            token = create_token(user['id'])
+
+            return jsonify({'ok': True, 'token': token})
+        except Exception as e:
+            logger.error(f"Billing login failed: {e}")
+            return jsonify({'ok': False, 'error': '로그인 실패'}), 401
 
     # ── 결제 페이지 ──
     @app.route('/proptalk/billing/')

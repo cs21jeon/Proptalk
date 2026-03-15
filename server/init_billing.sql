@@ -102,8 +102,8 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_created ON usage_logs(created_at);
 INSERT INTO billing_plans (code, name, plan_type, minutes_included, price, overage_rate, billing_cycle, sort_order)
 VALUES
     ('free',       '무료 체험',      'free',         10,    0,     0,  NULL,      0),
-    ('pack_1h',    '1시간 팩',       'time_pack',    60,    9900,  0,  NULL,      1),
-    ('pack_10h',   '10시간 팩',      'time_pack',    600,   79000, 0,  NULL,      2),
-    ('basic_30h',  'Basic 30시간',   'subscription', 1800,  29000, 12, 'monthly', 3),
-    ('pro_90h',    'Pro 90시간',     'subscription', 5400,  79000, 12, 'monthly', 4)
+    ('pack_1h',    '1시간 팩',       'time_pack',    60,    4900,  0,  NULL,      1),
+    ('pack_10h',   '10시간 팩',      'time_pack',    600,   19900, 0,  NULL,      2),
+    ('basic_30h',  'Basic 30시간',   'subscription', 1800,  29900, 12, 'monthly', 3),
+    ('pro_90h',    'Pro 90시간',     'subscription', 5400,  79900, 12, 'monthly', 4)
 ON CONFLICT (code) DO NOTHING;
